@@ -1,0 +1,41 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html,
+  body,
+  #root {
+    min-height: 100%;
+  }
+  body {
+    @apply bg-ink-950 font-sans text-slate-100 antialiased;
+  }
+  ::selection {
+    @apply bg-neon-purple/40;
+  }
+}
+
+@layer components {
+  .card {
+    @apply rounded-3xl border border-white/10 bg-ink-800/70 backdrop-blur-md;
+  }
+  .label-tiny {
+    @apply font-mono text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400;
+  }
+  .text-gradient {
+    @apply bg-gradient-to-r from-neon-blue via-neon-purple to-neon-pink bg-clip-text text-transparent;
+  }
+}
+
+:root {
+  color-scheme: dark;
+}
+
+/* ภาษาไทย: ไม่ใส่ระยะห่างตัวอักษร เพราะจะทำให้สระ/วรรณยุกต์แยกจากพยัญชนะ */
+html[lang='th'] .label-tiny,
+html[lang='th'] .tracking-wide,
+html[lang='th'] .tracking-wider,
+html[lang='th'] .tracking-widest {
+  letter-spacing: 0 !important;
+}

@@ -1,0 +1,8 @@
+# ใช้กับ Render.com (แพลนฟรี): New → Blueprint → เลือก repo นี้
+services:
+  - type: web
+    name: secret-faker
+    runtime: node
+    plan: free
+    buildCommand: npm install && npm run build
+    startCommand: npm start
