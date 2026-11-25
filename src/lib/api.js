@@ -2,22 +2,29 @@
 // ถ้าแยกโฮสต์ ให้ตั้ง VITE_API_URL ตอน build เช่น https://my-server.onrender.com
 const BASE = (import.meta.env.VITE_API_URL ?? '').replace(/\/$/, '')
 
-/** POST JSON → { ok: true, ...data } หรือ { ok: false, error: 'รหัสข้อผิดพลาด' } */
-export async function post(path, body) {
+/** เรียก API → { ok: true, ...data } หรือ { ok: false, error: 'รหัสข้อผิดพลาด' } */
+export async function request(method, path, body, token) {
   try {
+    const headers = {}
+    if (body !== undefined) headers['Content-Type'] = 'application/json'
+    if (token) headers.Authorization = `Bearer ${token}`
     const res = await fetch(BASE + path, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
+      method,
+      headers,
+      body: body === undefined ? undefined : JSON.stringify(body),
     })
     const data = await res.json().catch(() => ({}))
-    return res.ok ? { ok: true, ...data } : { ok: false, error: data.error ?? 'badRequest' }
+    return res.ok ? { ok: true, ...data } : { ok: false, error: data.error ?? 'badRequest', status: res.status }
   } catch {
     return { ok: false, error: 'network' }
   }
 }
 
+export const post = (path, body, token) => request('POST', path, body, token)
+export const get = (path, token) => request('GET', path, undefined, token)
+
 export const eventsUrl = ({ code, playerId, token }) =>
   `${BASE}/api/rooms/${code}/events?pid=${encodeURIComponent(playerId)}&token=${encodeURIComponent(token)}`
 
 export const avatarUrl = (code, pid, v) => `${BASE}/api/rooms/${code}/avatar/${pid}?v=${v}`
+export const accountAvatarUrl = (id, v) => `${BASE}/api/accounts/${id}/avatar?v=${v}`

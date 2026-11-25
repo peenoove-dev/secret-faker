@@ -37,8 +37,8 @@ export function imposterCountFor(playerCount) {
 }
 
 /** lobbyPlayers: [{ id, name }] */
-export function createGame(lobbyPlayers) {
-  const cat = pick(WORD_BANK)
+export function createGame(lobbyPlayers, bank = WORD_BANK) {
+  const cat = pick(bank)
   const word = pick(cat.words)
   const others = shuffle(cat.words.filter((w) => w !== word)).slice(0, CANDIDATE_COUNT - 1)
   const candidates = shuffle([word, ...others])

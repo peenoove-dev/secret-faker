@@ -6,3 +6,12 @@ services:
     plan: free
     buildCommand: npm install && npm run build
     startCommand: npm start
+    envVars:
+      # ตั้งรหัสผู้สร้างเองใน Render → Environment (ห้ามใส่ค่าจริงในไฟล์นี้)
+      - key: CREATOR_CODE
+        sync: false
+      # (แนะนำ) ที่เก็บข้อมูลถาวรฟรีจาก upstash.com → สร้าง Redis แล้วคัดลอก REST URL / REST TOKEN มาใส่
+      - key: UPSTASH_REDIS_REST_URL
+        sync: false
+      - key: UPSTASH_REDIS_REST_TOKEN
+        sync: false

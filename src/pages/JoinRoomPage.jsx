@@ -6,6 +6,7 @@ import Button from '../components/Button'
 import TextField from '../components/TextField'
 import { LoginIcon } from '../components/Icons'
 import { useRoom } from '../context/RoomContext'
+import { useAuth } from '../context/AuthContext'
 import { useLang } from '../i18n/LanguageContext'
 import { isValidRoomCode, normalizeRoomCode, ROOM_CODE_LENGTH } from '../lib/utils'
 
@@ -14,6 +15,7 @@ export default function JoinRoomPage() {
   const [params] = useSearchParams() // รองรับลิงก์ชวน: /join?code=ABC123
   const { joinRoom } = useRoom()
   const { t } = useLang()
+  const { account } = useAuth()
 
   const [nickname, setNickname] = useState('')
   const [code, setCode] = useState(normalizeRoomCode(params.get('code') ?? ''))
@@ -23,7 +25,7 @@ export default function JoinRoomPage() {
   const submit = async (e) => {
     e.preventDefault()
     const next = {}
-    const name = nickname.trim()
+    const name = account ? account.displayName : nickname.trim()
     if (!name) next.nickname = t('create.nicknameErr')
     if (!isValidRoomCode(code)) next.code = t('join.codeErr', { n: ROOM_CODE_LENGTH })
     setErrors(next)
@@ -61,17 +63,24 @@ export default function JoinRoomPage() {
             }}
           />
 
-          <TextField
-            label={t('join.nickname')}
-            placeholder={t('join.nicknamePh')}
-            maxLength={16}
-            value={nickname}
-            error={errors.nickname}
-            onChange={(e) => {
-              setNickname(e.target.value)
-              setErrors((x) => ({ ...x, nickname: undefined }))
-            }}
-          />
+          {account ? (
+            <p className="rounded-2xl border border-white/10 bg-ink-900/60 px-4 py-3 text-sm text-slate-300">
+              {t('auth.playingAs')} <b className="text-white">{account.displayName}</b>
+              {errors.nickname && <span className="mt-2 block text-xs font-medium text-red-400">{errors.nickname}</span>}
+            </p>
+          ) : (
+            <TextField
+              label={t('join.nickname')}
+              placeholder={t('join.nicknamePh')}
+              maxLength={16}
+              value={nickname}
+              error={errors.nickname}
+              onChange={(e) => {
+                setNickname(e.target.value)
+                setErrors((x) => ({ ...x, nickname: undefined }))
+              }}
+            />
+          )}
 
           <Button type="submit" variant="neon" className="w-full" disabled={busy} icon={<LoginIcon />}>
             {busy ? t('join.loading') : t('join.submit')}

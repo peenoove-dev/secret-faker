@@ -7,6 +7,7 @@ import TextField from '../components/TextField'
 import Segmented from '../components/Segmented'
 import { PlusIcon } from '../components/Icons'
 import { useRoom } from '../context/RoomContext'
+import { useAuth } from '../context/AuthContext'
 import { useLang } from '../i18n/LanguageContext'
 import { MAX_PLAYERS_OPTIONS } from '../../shared/gameLogic.js'
 
@@ -14,6 +15,7 @@ export default function CreateRoomPage() {
   const navigate = useNavigate()
   const { createRoom } = useRoom()
   const { t } = useLang()
+  const { account } = useAuth()
 
   const [nickname, setNickname] = useState('')
   const [roomName, setRoomName] = useState('')
@@ -24,7 +26,7 @@ export default function CreateRoomPage() {
 
   const submit = async (e) => {
     e.preventDefault()
-    const name = nickname.trim()
+    const name = account ? account.displayName : nickname.trim()
     if (!name) {
       setError(t('create.nicknameErr'))
       return
@@ -49,17 +51,24 @@ export default function CreateRoomPage() {
         <form onSubmit={submit} className="card space-y-5 p-6 sm:p-8">
           <h2 className="font-display text-2xl font-bold">{t('create.title')}</h2>
 
-          <TextField
-            label={t('create.nickname')}
-            placeholder={t('create.nicknamePh')}
-            maxLength={16}
-            value={nickname}
-            error={error}
-            onChange={(e) => {
-              setNickname(e.target.value)
-              setError('')
-            }}
-          />
+          {account ? (
+            <p className="rounded-2xl border border-white/10 bg-ink-900/60 px-4 py-3 text-sm text-slate-300">
+              {t('auth.playingAs')} <b className="text-white">{account.displayName}</b>
+              {error && <span className="mt-2 block text-xs font-medium text-red-400">{error}</span>}
+            </p>
+          ) : (
+            <TextField
+              label={t('create.nickname')}
+              placeholder={t('create.nicknamePh')}
+              maxLength={16}
+              value={nickname}
+              error={error}
+              onChange={(e) => {
+                setNickname(e.target.value)
+                setError('')
+              }}
+            />
+          )}
 
           <TextField
             label={t('create.roomName')}

@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { eventsUrl, post } from '../lib/api'
+import { useAuth } from './AuthContext'
 
 /**
  * RoomContext — เชื่อมกับเซิร์ฟเวอร์จริง
@@ -28,6 +29,9 @@ export function RoomProvider({ children }) {
   const [lostReason, setLostReason] = useState('')
   const sessionRef = useRef(session)
   sessionRef.current = session
+  const { token: authToken } = useAuth()
+  const authRef = useRef(authToken)
+  authRef.current = authToken
 
   useEffect(() => {
     try {
@@ -99,11 +103,11 @@ export function RoomProvider({ children }) {
 
   const createRoom = useCallback(
     ({ nickname, roomName, maxPlayers, isPrivate }) =>
-      enter('/api/rooms', { nickname, roomName, maxPlayers, isPrivate }),
+      enter('/api/rooms', { nickname, roomName, maxPlayers, isPrivate, auth: authRef.current }),
     [enter],
   )
   const joinRoom = useCallback(
-    ({ nickname, code }) => enter(`/api/rooms/${code}/join`, { nickname }),
+    ({ nickname, code }) => enter(`/api/rooms/${code}/join`, { nickname, auth: authRef.current }),
     [enter],
   )
 
