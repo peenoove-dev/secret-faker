@@ -3,6 +3,7 @@ import Button from '../Button'
 import TextField from '../TextField'
 import Avatar from './Avatar'
 import ClueBoard from './ClueBoard'
+import SpyHint from './SpyHint'
 import { currentSpeaker, getPlayer, validateClue } from '../../../shared/gameLogic.js'
 import { useLang } from '../../i18n/LanguageContext'
 import { cx } from '../../lib/utils'
@@ -30,6 +31,12 @@ export default function CluePhase({ game, act }) {
     <div className="mx-auto max-w-xl animate-fade-up">
       <h2 className="font-display text-2xl font-bold">{t('clue.title')}</h2>
       <p className="mt-1 text-sm text-slate-400">{t('clue.desc')}</p>
+
+      {game.candidates && (
+        <div className="card mt-4 border-neon-pink/30 p-4">
+          <SpyHint candidates={game.candidates} compact />
+        </div>
+      )}
 
       {/* turn order */}
       <div className="mt-5 flex gap-3 overflow-x-auto pb-2">

@@ -1,3 +1,5 @@
+import { useRoom } from '../../context/RoomContext'
+import { avatarUrl } from '../../lib/api'
 import { avatarColor, cx, initial } from '../../lib/utils'
 
 const SIZES = {
@@ -6,18 +8,41 @@ const SIZES = {
   lg: 'h-20 w-20 rounded-3xl text-3xl',
 }
 
-export default function Avatar({ player, size = 'md', className }) {
+/** รูปโปรไฟล์ (ถ้ามี) หรือตัวอักษรแรกของชื่อ — ใช้ได้ทั้งในห้องรอและในเกม */
+export function AvatarFace({ id, name, colorIndex = 0, className, dim }) {
+  const { session, room } = useRoom()
+  const v = room?.players.find((p) => p.id === id)?.avatarV
   return (
     <div
       className={cx(
-        'grid shrink-0 place-items-center bg-gradient-to-br font-display font-bold text-white shadow-lg',
-        SIZES[size],
-        avatarColor(player.colorIndex),
-        !player.alive && 'opacity-40 grayscale',
+        'relative grid shrink-0 place-items-center overflow-hidden bg-gradient-to-br font-display font-bold text-white shadow-lg',
+        avatarColor(colorIndex),
+        dim && 'opacity-40 grayscale',
         className,
       )}
     >
-      {initial(player.name)}
+      {v && session ? (
+        <img
+          src={avatarUrl(session.code, id, v)}
+          alt={name}
+          draggable={false}
+          className="absolute inset-0 h-full w-full object-cover"
+        />
+      ) : (
+        initial(name)
+      )}
     </div>
+  )
+}
+
+export default function Avatar({ player, size = 'md', className }) {
+  return (
+    <AvatarFace
+      id={player.id}
+      name={player.name}
+      colorIndex={player.colorIndex}
+      dim={!player.alive}
+      className={cx(SIZES[size], className)}
+    />
   )
 }

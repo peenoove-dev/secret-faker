@@ -91,6 +91,12 @@ export function RoomProvider({ children }) {
     [],
   )
 
+  const uploadAvatar = useCallback((image) => {
+    const s = sessionRef.current
+    if (!s) return Promise.resolve({ ok: false, error: 'sessionExpired' })
+    return post(`/api/rooms/${s.code}/avatar`, { pid: s.playerId, token: s.token, image })
+  }, [])
+
   const createRoom = useCallback(
     ({ nickname, roomName, maxPlayers, isPrivate }) =>
       enter('/api/rooms', { nickname, roomName, maxPlayers, isPrivate }),
@@ -117,8 +123,9 @@ export function RoomProvider({ children }) {
       joinRoom,
       leaveRoom,
       act,
+      uploadAvatar,
     }),
-    [session, room, game, me, online, lostReason, createRoom, joinRoom, leaveRoom, act],
+    [session, room, game, me, online, lostReason, createRoom, joinRoom, leaveRoom, act, uploadAvatar],
   )
 
   return <RoomContext.Provider value={value}>{children}</RoomContext.Provider>

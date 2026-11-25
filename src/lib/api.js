@@ -19,3 +19,5 @@ export async function post(path, body) {
 
 export const eventsUrl = ({ code, playerId, token }) =>
   `${BASE}/api/rooms/${code}/events?pid=${encodeURIComponent(playerId)}&token=${encodeURIComponent(token)}`
+
+export const avatarUrl = (code, pid, v) => `${BASE}/api/rooms/${code}/avatar/${pid}?v=${v}`

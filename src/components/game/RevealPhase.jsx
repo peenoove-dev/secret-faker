@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import Button from '../Button'
+import SpyHint from './SpyHint'
 import { getPlayer } from '../../../shared/gameLogic.js'
 import { useLang } from '../../i18n/LanguageContext'
 import { cx } from '../../lib/utils'
@@ -41,6 +42,7 @@ export default function RevealPhase({ game, act }) {
               {t('reveal.category')} <b className="text-white">{loc(game.category)}</b>
             </p>
             <p className="mt-2 text-sm text-slate-400">{t('reveal.fakerHint')}</p>
+            <SpyHint candidates={game.candidates} />
           </div>
         ) : (
           <div className="animate-pop-in">

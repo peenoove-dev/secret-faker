@@ -12,6 +12,8 @@ import { WORD_BANK } from './wordBank.js'
 
 export const MIN_PLAYERS_TO_START = 3
 export const MAX_PLAYERS_OPTIONS = [4, 5, 6, 7, 8]
+export const CANDIDATE_COUNT = 8 // จำนวนคำที่ตัวปลอมเห็นเป็นตัวช่วย (มีคำลับรวมอยู่ด้วย)
+export const GUESS_OPTION_COUNT = 5 // ตัวเลือกตอนตัวปลอมโดนโหวตออกแล้วต้องเดาคำ
 
 export const pick = (arr) => arr[Math.floor(Math.random() * arr.length)]
 
@@ -38,6 +40,8 @@ export function imposterCountFor(playerCount) {
 export function createGame(lobbyPlayers) {
   const cat = pick(WORD_BANK)
   const word = pick(cat.words)
+  const others = shuffle(cat.words.filter((w) => w !== word)).slice(0, CANDIDATE_COUNT - 1)
+  const candidates = shuffle([word, ...others])
   const fakerIds = new Set(
     shuffle(lobbyPlayers.map((p) => p.id)).slice(0, imposterCountFor(lobbyPlayers.length)),
   )
@@ -54,6 +58,8 @@ export function createGame(lobbyPlayers) {
     players,
     category: cat.category, // { th, en }
     word, // { th, en }  — ห้ามส่งให้ Faker จนกว่าเกมจะจบ
+    candidates, // คำที่ตัวปลอมเห็นเป็นตัวช่วย (รวมคำลับ) — ส่งให้ตัวปลอมเท่านั้น
+    guess: null, // ตัวปลอมโดนโหวตออก → { by, options, status: 'pending'|'wrong'|'correct', picked }
     acks: [], // รหัสผู้เล่นที่กด "เข้าใจแล้ว" ในหน้าเปิดบทบาท
     turnOrder: shuffle(players.map((p) => p.id)),
     turnIndex: 0,
@@ -65,12 +71,13 @@ export function createGame(lobbyPlayers) {
   }
 }
 
+// ตัวปลอมชนะเมื่อมี "มากกว่า" พลเมือง (เดิมคือเท่ากับก็ชนะ) → เกมยาวขึ้นอีก 1 รอบ
 export function checkWinner(players) {
   const alive = players.filter((p) => p.alive)
   const fakers = alive.filter((p) => p.role === 'imposter').length
   const civilians = alive.length - fakers
   if (fakers === 0) return 'civilians'
-  if (fakers >= civilians) return 'imposters'
+  if (fakers > civilians) return 'imposters'
   return null
 }
 
@@ -110,9 +117,16 @@ function maybeTally(state) {
   const max = Math.max(...Object.values(tally))
   const top = Object.keys(tally).filter((id) => tally[id] === max)
   const eliminatedId = top.length === 1 ? top[0] : pick(top)
+  const out = getPlayer(state, eliminatedId)
+  let guess = null
+  if (out?.role === 'imposter') {
+    const wrong = shuffle(state.candidates.filter((w) => w.th !== state.word.th)).slice(0, GUESS_OPTION_COUNT - 1)
+    guess = { by: eliminatedId, options: shuffle([state.word, ...wrong]), status: 'pending', picked: null }
+  }
 
   return {
     ...state,
+    guess,
     phase: 'elimination',
     players: state.players.map((p) => (p.id === eliminatedId ? { ...p, alive: false } : p)),
     lastResult: { eliminatedId, tally, votes, tie: top.length > 1 },
@@ -126,6 +140,10 @@ function maybeStartClues(state) {
 
 /** ผู้เล่นออกกลางเกม → ถือว่าตกรอบ แล้วจัดสถานะให้เดินต่อได้ */
 function removePlayer(state, playerId) {
+  // ตัวปลอมที่กำลังเดาคำหลุดจากห้อง → ถือว่าเดาผิด เกมเดินต่อได้
+  if (state.phase === 'elimination' && state.guess?.status === 'pending' && state.guess.by === playerId) {
+    return { ...state, guess: { ...state.guess, status: 'wrong', picked: null, timeout: true } }
+  }
   const target = getPlayer(state, playerId)
   if (!target?.alive || state.phase === 'gameover') return state
 
@@ -199,6 +217,7 @@ export function gameReducer(state, action) {
 
     case 'CONTINUE': {
       if (state.phase !== 'elimination') return state
+      if (state.guess?.status === 'pending') return state // รอตัวปลอมเดาคำก่อน
       const winner = checkWinner(state.players)
       if (winner) return { ...state, winner, phase: 'gameover' }
       const aliveIds = state.players.filter((p) => p.alive).map((p) => p.id)
@@ -212,7 +231,25 @@ export function gameReducer(state, action) {
         turnOrder: shuffle(aliveIds),
         turnIndex: 0,
         lastResult: null,
+        guess: null,
       }
+    }
+
+    case 'GUESS_WORD': {
+      if (state.phase !== 'elimination' || state.guess?.status !== 'pending') return state
+      if (action.playerId !== state.guess.by) return state
+      const opt = state.guess.options[Number(action.index)]
+      if (!opt) return state
+      const correct = opt.th === state.word.th
+      const guess = { ...state.guess, status: correct ? 'correct' : 'wrong', picked: opt }
+      // เดาถูก = ตัวปลอมชนะทันที
+      if (correct) return { ...state, guess, winner: 'imposters', phase: 'gameover' }
+      return { ...state, guess }
+    }
+
+    case 'GUESS_TIMEOUT': {
+      if (state.phase !== 'elimination' || state.guess?.status !== 'pending') return state
+      return { ...state, guess: { ...state.guess, status: 'wrong', picked: null, timeout: true } }
     }
 
     case 'REMOVE_PLAYER':
@@ -246,6 +283,17 @@ export function viewFor(state, playerId) {
     fakerCount: state.players.filter((p) => p.role === 'imposter').length,
     category: state.category,
     word: over || me?.role !== 'imposter' ? state.word : null,
+    candidates: me?.role === 'imposter' && !over ? state.candidates : null,
+    guess: state.guess
+      ? {
+          by: state.guess.by,
+          status: state.guess.status,
+          picked: state.guess.picked,
+          timeout: !!state.guess.timeout,
+          deadline: state.guess.deadline ?? null,
+          options: state.guess.by === playerId && state.guess.status === 'pending' ? state.guess.options : null,
+        }
+      : null,
     ackCount: state.acks.length,
     iAcked: state.acks.includes(playerId),
     turnOrder: state.turnOrder,

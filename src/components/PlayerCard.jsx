@@ -1,10 +1,38 @@
-import { avatarColor, cx, initial } from '../lib/utils'
+import { useRef, useState } from 'react'
+import { cx } from '../lib/utils'
+import { fileToAvatar } from '../lib/image'
+import { useRoom } from '../context/RoomContext'
+import { AvatarFace } from './game/Avatar'
 import { useLang } from '../i18n/LanguageContext'
 import { CrownIcon } from './Icons'
 
 export function PlayerCard({ player, index, isMe }) {
   const { t } = useLang()
   const offline = player.connected === false
+  const { uploadAvatar } = useRoom()
+  const fileRef = useRef(null)
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState('')
+
+  const onFile = async (e) => {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file) return
+    setErr('')
+    setBusy(true)
+    try {
+      const r = await uploadAvatar(await fileToAvatar(file))
+      if (!r.ok) setErr(t(`err.${r.error}`))
+    } catch {
+      setErr(t('err.badImage'))
+    }
+    setBusy(false)
+  }
+  const removeAvatar = async () => {
+    setBusy(true)
+    await uploadAvatar(null)
+    setBusy(false)
+  }
   return (
     <div
       className={cx(
@@ -21,14 +49,26 @@ export function PlayerCard({ player, index, isMe }) {
       )}
 
       <div className="relative">
-        <div
-          className={cx(
-            'grid h-16 w-16 place-items-center rounded-2xl bg-gradient-to-br font-display text-2xl font-bold text-white shadow-lg sm:h-[72px] sm:w-[72px]',
-            avatarColor(index),
-          )}
-        >
-          {initial(player.name)}
-        </div>
+        <AvatarFace
+          id={player.id}
+          name={player.name}
+          colorIndex={index}
+          className="h-16 w-16 rounded-2xl text-2xl sm:h-[72px] sm:w-[72px]"
+        />
+        {isMe && (
+          <>
+            <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={onFile} />
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => fileRef.current?.click()}
+              aria-label={t('profile.change')}
+              className="absolute -bottom-1 -left-1 grid h-7 w-7 place-items-center rounded-full border-2 border-ink-800 bg-neon-blue text-sm shadow-lg transition hover:brightness-110 active:scale-90 disabled:opacity-50"
+            >
+              {busy ? '…' : '📷'}
+            </button>
+          </>
+        )}
         <span
           className={cx(
             'absolute -bottom-1 -right-1 h-4 w-4 rounded-full border-2 border-ink-800',
@@ -49,6 +89,12 @@ export function PlayerCard({ player, index, isMe }) {
       >
         {offline ? t('common.offline') : player.ready ? t('lobby.readyLabel') : t('lobby.notReady')}
       </p>
+      {isMe && player.avatarV && (
+        <button type="button" onClick={removeAvatar} className="mt-1 text-[10px] text-slate-500 underline hover:text-slate-300">
+          {t('profile.remove')}
+        </button>
+      )}
+      {err && <p className="mt-1 text-center text-[10px] text-neon-pink">{err}</p>}
     </div>
   )
 }

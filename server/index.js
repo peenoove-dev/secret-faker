@@ -26,6 +26,8 @@ const PORT = Number(process.env.PORT) || 3001
 const GRACE_MS = Number(process.env.GRACE_MS) || 45_000 // หลุดการเชื่อมต่อนานเท่านี้ถึงถือว่าออกจากห้อง
 const ROOM_TTL_MS = 6 * 60 * 60 * 1000 // ห้องที่ไม่มีความเคลื่อนไหวนาน 6 ชม. จะถูกลบ
 const MAX_ROOMS = 500
+const GUESS_MS = 45_000 // เวลาที่ตัวปลอมมีเดาคำหลังโดนโหวตออก
+const AVATAR_MAX_BYTES = 60_000
 const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789' // ไม่มี 0/O/1/I
 
 /** @type {Map<string, any>} */
@@ -59,6 +61,7 @@ function publicRoom(room) {
       ready: p.ready,
       isHost: p.isHost,
       connected: p.conns.size > 0,
+      avatarV: p.avatar ? p.avatarV : null,
     })),
   }
 }
@@ -72,7 +75,27 @@ function sendState(room, player) {
   for (const res of player.conns) res.write(`event: state\ndata: ${payload}\n\n`)
 }
 
+// ตั้ง/ล้างตัวจับเวลาตอนตัวปลอมเดาคำ (เรียกทุกครั้งก่อนส่งสถานะ)
+function syncGuessTimer(room) {
+  const g = room.game?.guess
+  if (g?.status === 'pending') {
+    if (!room.guessTimer) {
+      room.game = { ...room.game, guess: { ...g, deadline: Date.now() + GUESS_MS } }
+      room.guessTimer = setTimeout(() => {
+        room.guessTimer = null
+        if (rooms.get(room.code) !== room || !room.game) return
+        room.game = gameReducer(room.game, { type: 'GUESS_TIMEOUT' })
+        broadcast(room)
+      }, GUESS_MS)
+    }
+  } else if (room.guessTimer) {
+    clearTimeout(room.guessTimer)
+    room.guessTimer = null
+  }
+}
+
 function broadcast(room) {
+  syncGuessTimer(room)
   room.touched = Date.now()
   room.players.forEach((p) => sendState(room, p))
 }
@@ -156,6 +179,7 @@ function handleAction(room, player, body) {
     case 'ACK_REVEAL':
     case 'SUBMIT_CLUE':
     case 'CAST_VOTE':
+    case 'GUESS_WORD':
     case 'CONTINUE': {
       if (!game) return 'badState'
       if (type === 'CONTINUE' && !player.isHost) return 'notHost'
@@ -168,6 +192,7 @@ function handleAction(room, player, body) {
         playerId: player.id, // ใช้ตัวตนจากโทเค็นเสมอ ไม่เชื่อค่าที่ client ส่งมา
         text: body.text,
         targetId: body.targetId,
+        index: body.index,
       })
       if (next === game) return 'badState'
       room.game = next
@@ -197,13 +222,13 @@ function json(res, status, data) {
   res.end(JSON.stringify(data))
 }
 
-function readBody(req) {
+function readBody(req, limit = 10_000) {
   return new Promise((resolve, reject) => {
     let size = 0
     const chunks = []
     req.on('data', (c) => {
       size += c.length
-      if (size > 10_000) {
+      if (size > limit) {
         reject(new Error('too large'))
         req.destroy()
       } else chunks.push(c)
@@ -267,10 +292,39 @@ const server = http.createServer(async (req, res) => {
       return json(res, 200, { code: room.code, playerId: host.id, token: host.token })
     }
 
-    const m = url.pathname.match(/^\/api\/rooms\/([A-Za-z0-9]{6})\/(join|events|action)$/)
+    const m = url.pathname.match(/^\/api\/rooms\/([A-Za-z0-9]{6})\/(join|events|action|avatar(?:\/[a-f0-9]+)?)$/)
     if (!m) return json(res, 404, { error: 'notFound' })
     const room = rooms.get(m[1].toUpperCase())
     const route = m[2]
+
+    // รูปโปรไฟล์: ดู (GET /avatar/:playerId) / อัปโหลด (POST /avatar)
+    if (route.startsWith('avatar')) {
+      if (!room) return json(res, 404, { error: 'roomNotFound' })
+      if (req.method === 'GET') {
+        const target = room.players.find((p) => p.id === route.split('/')[1])
+        if (!target?.avatar) return json(res, 404, { error: 'notFound' })
+        res.writeHead(200, { 'Content-Type': 'image/jpeg', 'Cache-Control': 'public, max-age=31536000, immutable' })
+        return res.end(target.avatar)
+      }
+      if (req.method === 'POST') {
+        const body = await readBody(req, 120_000)
+        const player = auth(room, body.pid, body.token)
+        if (!player) return json(res, 401, { error: 'unauthorized' })
+        if (body.image === null) {
+          player.avatar = null
+        } else {
+          const mm = /^data:image\/jpeg;base64,([A-Za-z0-9+/=]+)$/.exec(String(body.image ?? ''))
+          if (!mm) return json(res, 400, { error: 'badImage' })
+          const buf = Buffer.from(mm[1], 'base64')
+          if (buf.length > AVATAR_MAX_BYTES || buf[0] !== 0xff || buf[1] !== 0xd8) return json(res, 400, { error: 'badImage' })
+          player.avatar = buf
+          player.avatarV = Date.now()
+        }
+        broadcast(room)
+        return json(res, 200, { ok: true })
+      }
+      return json(res, 404, { error: 'notFound' })
+    }
 
     // เข้าห้อง
     if (req.method === 'POST' && route === 'join') {

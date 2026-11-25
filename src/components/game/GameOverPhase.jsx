@@ -1,6 +1,6 @@
 import Button from '../Button'
 import Avatar from './Avatar'
-import { didIWin } from '../../../shared/gameLogic.js'
+import { didIWin, getPlayer } from '../../../shared/gameLogic.js'
 import { useLang } from '../../i18n/LanguageContext'
 import { cx } from '../../lib/utils'
 
@@ -21,6 +21,12 @@ export default function GameOverPhase({ game, isHost, onPlayAgain, onBackToLobby
         {civiliansWon ? t('over.civiliansWin') : t('over.fakersWin')}
       </h2>
       <p className="mt-2 text-sm text-slate-400">{won ? t('over.won') : t('over.lost')}</p>
+
+      {game.guess?.status === 'correct' && (
+        <p className="mt-4 rounded-2xl border border-neon-pink/40 bg-neon-pink/10 p-3 text-sm font-bold text-neon-pink">
+          {t('over.guessedRight', { name: getPlayer(game, game.guess.by).name, word: loc(game.guess.picked) })}
+        </p>
+      )}
 
       <div className="card mt-6 p-5">
         <p className="label-tiny">{t('over.secretWas')}</p>
