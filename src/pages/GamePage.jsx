@@ -12,6 +12,7 @@ import { LogoutIcon } from '../components/Icons'
 import { LogoMark } from '../components/Logo'
 import RevealPhase from '../components/game/RevealPhase'
 import CluePhase from '../components/game/CluePhase'
+import DrawPhase from '../components/game/DrawPhase'
 import VotePhase from '../components/game/VotePhase'
 import EliminationPhase from '../components/game/EliminationPhase'
 import GameOverPhase from '../components/game/GameOverPhase'
@@ -30,7 +31,7 @@ function GameSfx({ game }) {
     const cur = {
       phase: game.phase,
       round: game.round,
-      clues: game.clues.length,
+      clues: game.mode === 'draw' ? game.strokes.length : game.clues.length, // เสียงตอนมีคนส่งคำใบ้/วาดเส้น
       votes: game.voteCount,
       myTurn: game.phase === 'clues' && speakerId === game.meId,
     }
@@ -135,7 +136,7 @@ export default function GamePage() {
         {/* key forces a fresh mount (and animation) on each phase / round */}
         <div key={`${game.phase}-${game.round}`}>
           {game.phase === 'reveal' && <RevealPhase game={game} act={send} />}
-          {game.phase === 'clues' && <CluePhase game={game} act={send} />}
+          {game.phase === 'clues' && (game.mode === 'draw' ? <DrawPhase game={game} act={send} /> : <CluePhase game={game} act={send} />)}
           {game.phase === 'voting' && <VotePhase game={game} act={send} />}
           {game.phase === 'elimination' && <EliminationPhase game={game} act={send} isHost={isHost} />}
           {game.phase === 'gameover' && (

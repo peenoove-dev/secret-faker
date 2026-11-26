@@ -22,6 +22,7 @@ import {
   viewFor,
 } from '../shared/gameLogic.js'
 import { WORD_BANK } from '../shared/wordBank.js'
+import { DRAW_TURN_MS } from '../shared/drawing.js'
 import { applyGameResult, levelFor } from '../shared/achievements.js'
 import { createStore } from './store.js'
 import { createAccounts, cleanDisplay } from './accounts.js'
@@ -34,6 +35,8 @@ const GRACE_MS = Number(process.env.GRACE_MS) || 45_000 // หลุดการ
 const ROOM_TTL_MS = 6 * 60 * 60 * 1000 // ห้องที่ไม่มีความเคลื่อนไหวนาน 6 ชม. จะถูกลบ
 const MAX_ROOMS = 500
 const GUESS_MS = 45_000 // เวลาที่ตัวปลอมมีเดาคำหลังโดนโหวตออก
+const GAME_MODES = ['words', 'draw'] // ใบ้คำ | วาดรูป
+const TURN_MS = Number(process.env.DRAW_TURN_MS) || DRAW_TURN_MS // เวลาต่อหนึ่งตาในโหมดวาดรูป (ตั้งสั้น ๆ เพื่อทดสอบได้)
 const AVATAR_MAX_BYTES = 60_000
 const PING_MS = Number(process.env.PING_MS) || 15_000 // ส่ง ping ให้ client รู้ว่าการเชื่อมต่อยังมีชีวิต (client จะต่อใหม่เองถ้าเงียบเกิน ~40 วิ)
 const MAX_CONNS_PER_PLAYER = 4
@@ -101,6 +104,7 @@ function publicRoom(room) {
     name: room.name,
     maxPlayers: room.maxPlayers,
     isPrivate: room.isPrivate,
+    mode: room.mode,
     hostId: room.players.find((p) => p.isHost)?.id ?? null,
     inGame: !!room.game,
     players: room.players.map((p) => ({
@@ -169,6 +173,35 @@ function syncGuessTimer(room) {
     clearTimeout(room.guessTimer)
     room.guessTimer = null
   }
+}
+
+// โหมดวาดรูป: จับเวลาแต่ละตา ถ้าคนที่ถึงตาไม่วาดภายในเวลา (หลับ/เน็ตหลุด) ให้ข้ามตาไปเลย เกมจะได้ไม่ค้าง
+// ตัวจับเวลาผูกกับ "ตาปัจจุบัน" (รอบ+ลำดับ+คนวาด) — เปลี่ยนตาเมื่อไรก็เริ่มนับใหม่ (เรียกทุกครั้งก่อนส่งสถานะ)
+function syncTurnTimer(room) {
+  const g = room.game
+  const drawing = !!g && g.mode === 'draw' && g.phase === 'clues'
+  if (!drawing) {
+    if (room.turnTimer) clearTimeout(room.turnTimer)
+    room.turnTimer = null
+    room.turnKey = null
+    if (g?.turnDeadline) room.game = { ...g, turnDeadline: null }
+    return
+  }
+  const speaker = g.turnOrder[g.turnIndex]
+  const key = `${g.round}:${g.turnIndex}:${speaker}`
+  if (room.turnTimer && room.turnKey === key) return
+  clearTimeout(room.turnTimer)
+  room.turnKey = key
+  room.game = { ...g, turnDeadline: Date.now() + TURN_MS }
+  const { round, turnIndex } = g
+  room.turnTimer = setTimeout(() => {
+    room.turnTimer = null
+    if (rooms.get(room.code) !== room || !room.game) return
+    const next = gameReducer(room.game, { type: 'DRAW_SKIP', round, turnIndex, speaker })
+    if (next === room.game) return // ตานี้ผ่านไปแล้ว (มีคนวาดทัน)
+    room.game = next
+    broadcast(room)
+  }, TURN_MS + 500) // เผื่อเวลาให้เส้นที่ส่งมาตอนใกล้หมดเวลาทัน
 }
 
 // บันทึกสถิติ/คะแนน/ความสำเร็จของผู้เล่นที่ล็อกอิน เมื่อเกมจบ (ครั้งเดียวต่อเกม)
@@ -258,6 +291,7 @@ const isCreator = (room, playerId) => !!accounts.byId(room.accountOf.get(playerI
 
 function broadcast(room) {
   syncGuessTimer(room)
+  syncTurnTimer(room)
   recordStats(room)
   room.touched = Date.now()
   room.players.forEach((p) => sendState(room, p))
@@ -322,6 +356,13 @@ function handleAction(room, player, body) {
       room.isPrivate = !!body.value
       return ''
 
+    case 'SET_MODE':
+      if (!player.isHost) return 'notHost'
+      if (game) return 'gameStarted'
+      if (!GAME_MODES.includes(body.value)) return 'badRequest'
+      room.mode = body.value
+      return ''
+
     case 'TOGGLE_READY':
       if (game) return 'gameStarted'
       if (player.isHost) return '' // เจ้าของห้องพร้อมอยู่แล้วเสมอ
@@ -340,6 +381,7 @@ function handleAction(room, player, body) {
       room.game = createGame(
         room.players.map((p) => ({ id: p.id, name: p.name })),
         currentBank(),
+        room.mode,
       )
       return ''
     }
@@ -351,6 +393,7 @@ function handleAction(room, player, body) {
       room.game = createGame(
         room.players.map((p) => ({ id: p.id, name: p.name })),
         currentBank(),
+        room.mode,
       )
       return ''
     }
@@ -365,6 +408,7 @@ function handleAction(room, player, body) {
 
     case 'ACK_REVEAL':
     case 'SUBMIT_CLUE':
+    case 'DRAW_STROKE':
     case 'CAST_VOTE':
     case 'GUESS_WORD':
     case 'CREATOR_PEEK':
@@ -380,6 +424,7 @@ function handleAction(room, player, body) {
         type,
         playerId: player.id, // ใช้ตัวตนจากโทเค็นเสมอ ไม่เชื่อค่าที่ client ส่งมา
         text: body.text,
+        stroke: body.stroke,
         targetId: body.targetId,
         index: body.index,
       })
@@ -688,6 +733,7 @@ const server = http.createServer(async (req, res) => {
         name: String(body.roomName ?? '').trim().slice(0, 24),
         maxPlayers,
         isPrivate: body.isPrivate !== false,
+        mode: 'words',
         players: [host],
         accountOf: new Map(acc ? [[host.id, acc.id]] : []),
         game: null,

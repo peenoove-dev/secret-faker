@@ -4,6 +4,7 @@ import Background from '../components/Background'
 import Button from '../components/Button'
 import ConnectionBanner from '../components/ConnectionBanner'
 import LangSwitch from '../components/LangSwitch'
+import Segmented from '../components/Segmented'
 import SoundToggle from '../components/SoundToggle'
 import ChatPanel from '../components/ChatPanel'
 import Loading from '../components/Loading'
@@ -98,6 +99,18 @@ export default function LobbyPage() {
   const PrivacyIcon = room.isPrivate ? LockIcon : GlobeIcon
   const privacyLabel = room.isPrivate ? t('lobby.private') : t('lobby.public')
 
+  const setMode = async (mode) => {
+    const r = await act('SET_MODE', { value: mode })
+    if (!r.ok) {
+      sfx.error()
+      setToast(t(`err.${r.error}`))
+    }
+  }
+  const modeOptions = [
+    { value: 'words', label: t('mode.words') },
+    { value: 'draw', label: t('mode.draw') },
+  ]
+
   return (
     <div className="relative min-h-screen">
       <Background />
@@ -165,9 +178,20 @@ export default function LobbyPage() {
             </button>
 
             <div className="panel space-y-6 p-5 sm:p-6">
+              {isHost ? (
+                <Segmented label={t('mode.label')} value={room.mode} onChange={setMode} options={modeOptions} />
+              ) : (
+                <div className="flex items-center justify-between gap-3">
+                  <p className="label">{t('mode.label')}</p>
+                  <span className="chip !text-base">{modeOptions.find((o) => o.value === room.mode)?.label}</span>
+                </div>
+              )}
+
               <div className="paper-flat rule-lines p-4" style={{ backgroundSize: '100% 1.75rem' }}>
                 <p className="label-ink">{t('lobby.rules')}</p>
-                <p className="mt-1.5 text-base leading-7 text-ink">{t('lobby.rulesText')}</p>
+                <p className="mt-1.5 text-base leading-7 text-ink">
+                  {t(room.mode === 'draw' ? 'lobby.rulesTextDraw' : 'lobby.rulesText')}
+                </p>
               </div>
 
               <div className="flex items-end justify-between gap-4">

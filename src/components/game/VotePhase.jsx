@@ -2,6 +2,8 @@ import { useState } from 'react'
 import Button from '../Button'
 import Avatar from './Avatar'
 import ClueBoard from './ClueBoard'
+import DrawingBoard, { ColorDot } from './DrawingBoard'
+import { drawColor } from '../../../shared/drawing.js'
 import { CheckIcon } from '../Icons'
 import { alivePlayers, getPlayer } from '../../../shared/gameLogic.js'
 import { useLang } from '../../i18n/LanguageContext'
@@ -9,7 +11,8 @@ import { cx } from '../../lib/utils'
 import { sfx } from '../../lib/sound'
 
 export default function VotePhase({ game, act }) {
-  const { t } = useLang()
+  const { t, loc } = useLang()
+  const drawMode = game.mode === 'draw'
   const [choice, setChoice] = useState(null)
   const me = getPlayer(game, game.meId)
   const alive = alivePlayers(game)
@@ -21,14 +24,20 @@ export default function VotePhase({ game, act }) {
   return (
     <div className="mx-auto max-w-xl animate-fade-in">
       <h2 className="font-display text-3xl leading-tight">{t('vote.title')}</h2>
-      <p className="mt-1 text-base text-felt-200">{t('vote.desc')}</p>
+      <p className="mt-1 text-base text-felt-200">{t(drawMode ? 'vote.descDraw' : 'vote.desc')}</p>
 
-      <details className="panel mt-4 p-4">
-        <summary className="cursor-pointer text-base font-bold text-felt-200 hover:text-paper">{t('vote.review')}</summary>
+      {drawMode ? (
         <div className="mt-4">
-          <ClueBoard game={game} />
+          <DrawingBoard game={game} />
         </div>
-      </details>
+      ) : (
+        <details className="panel mt-4 p-4">
+          <summary className="cursor-pointer text-base font-bold text-felt-200 hover:text-paper">{t('vote.review')}</summary>
+          <div className="mt-4">
+            <ClueBoard game={game} />
+          </div>
+        </details>
+      )}
 
       {!me.alive && (
         <p className="mt-4 rounded-lg border-2 border-felt-600 bg-felt-800 p-3 text-center text-base text-felt-200">
@@ -62,9 +71,16 @@ export default function VotePhase({ game, act }) {
               )}
               <Avatar player={p} />
               <span className="max-w-full truncate font-display text-lg leading-tight">{p.name}</span>
-              <span className="max-w-full truncate text-base text-ink-soft">
-                “{game.clues.find((c) => c.playerId === p.id)?.text}”
-              </span>
+              {drawMode ? (
+                <span className="flex max-w-full items-center gap-1.5 truncate text-base text-ink-soft">
+                  <ColorDot player={p} />
+                  {loc(drawColor(p.colorIndex))}
+                </span>
+              ) : (
+                <span className="max-w-full truncate text-base text-ink-soft">
+                  “{game.clues.find((c) => c.playerId === p.id)?.text}”
+                </span>
+              )}
             </button>
           )
         })}

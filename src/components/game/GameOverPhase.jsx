@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import Button from '../Button'
 import Avatar from './Avatar'
+import DrawingBoard, { ColorLegend } from './DrawingBoard'
 import Confetti from '../Confetti'
 import ScreenFlash from '../ScreenFlash'
 import { AchievementIcon, ArrowUpIcon, ChatIcon, MaskXIcon, TargetIcon, TrophyIcon } from '../Icons'
@@ -88,6 +89,14 @@ export default function GameOverPhase({ game, isHost, onPlayAgain, onBackToLobby
       )}
 
       {game.rewards && <Rewards rewards={game.rewards} t={t} />}
+
+      {game.mode === 'draw' && (
+        <div className="mt-6 text-left">
+          <p className="label mb-2">{t('over.drawing')}</p>
+          <DrawingBoard game={game} />
+          <ColorLegend game={game} className="mt-3" />
+        </div>
+      )}
 
       <div className="paper mt-6 px-5 py-6">
         <p className="label-ink">{t('over.secretWas')}</p>

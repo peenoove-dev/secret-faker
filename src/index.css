@@ -119,6 +119,20 @@ html[lang='th'] .tracking-widest {
   transform: rotateY(180deg);
 }
 
+/* โหมดวาดรูป: เส้นของคนอื่นค่อย ๆ ถูกวาดขึ้นตอนมาถึง (path มี pathLength="1") */
+@keyframes draw-in {
+  from {
+    stroke-dashoffset: 1;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+.stroke-anim {
+  stroke-dasharray: 1;
+  animation: draw-in 0.8s ease-out both;
+}
+
 /* ผู้ใช้ที่ตั้งค่า "ลดการเคลื่อนไหว" ในระบบ: ปิดแอนิเมชันที่ไม่จำเป็น */
 @media (prefers-reduced-motion: reduce) {
   *,

@@ -1,4 +1,5 @@
 import { WORD_BANK } from './wordBank.js'
+import { DRAW_CATEGORIES, DRAW_LAPS, sanitizeStroke } from './drawing.js'
 
 /**
  * ตรรกะเกมล้วน ๆ (ไม่มี React) — รันบนเซิร์ฟเวอร์เท่านั้น
@@ -8,6 +9,9 @@ import { WORD_BANK } from './wordBank.js'
  *
  * actions (ทุก action มี playerId ที่เซิร์ฟเวอร์ใส่ให้เอง จากโทเค็นของผู้เล่น):
  *   ACK_REVEAL, SUBMIT_CLUE {text}, CAST_VOTE {targetId}, CONTINUE, REMOVE_PLAYER
+ *
+ * โหมดวาดรูป (state.mode === 'draw') ใช้เฟสเดิมทั้งหมด โดยเฟส 'clues' คือเฟสผลัดกันวาดคนละเส้น
+ *   DRAW_STROKE {stroke}, DRAW_SKIP (เซิร์ฟเวอร์ส่งเองเมื่อหมดเวลา) — โหวตครั้งเดียวตัดสินเกม (ดู CONTINUE)
  */
 
 export const MIN_PLAYERS_TO_START = 3
@@ -32,18 +36,21 @@ export const getPlayer = (state, id) => state.players.find((p) => p.id === id)
 export const alivePlayers = (state) => state.players.filter((p) => p.alive)
 export const currentSpeaker = (state) => getPlayer(state, state.turnOrder[state.turnIndex])
 
-export function imposterCountFor(playerCount) {
+export function imposterCountFor(playerCount, mode = 'words') {
+  if (mode === 'draw') return 1 // โหมดวาดรูปมีตัวปลอมคนเดียวเสมอ
   return playerCount >= 7 ? 2 : 1
 }
 
-/** lobbyPlayers: [{ id, name }] */
-export function createGame(lobbyPlayers, bank = WORD_BANK) {
-  const cat = pick(bank)
+/** lobbyPlayers: [{ id, name }] · mode: 'words' (ใบ้คำ) | 'draw' (วาดรูป) */
+export function createGame(lobbyPlayers, bank = WORD_BANK, mode = 'words') {
+  const drawMode = mode === 'draw'
+  const pool = drawMode ? bank.filter((c) => DRAW_CATEGORIES.includes(c.category.en)) : bank
+  const cat = pick(pool.length ? pool : bank)
   const word = pick(cat.words)
   const others = shuffle(cat.words.filter((w) => w !== word)).slice(0, CANDIDATE_COUNT - 1)
   const candidates = shuffle([word, ...others])
   const fakerIds = new Set(
-    shuffle(lobbyPlayers.map((p) => p.id)).slice(0, imposterCountFor(lobbyPlayers.length)),
+    shuffle(lobbyPlayers.map((p) => p.id)).slice(0, imposterCountFor(lobbyPlayers.length, mode)),
   )
   const players = lobbyPlayers.map((p, i) => ({
     id: p.id,
@@ -52,7 +59,9 @@ export function createGame(lobbyPlayers, bank = WORD_BANK) {
     role: fakerIds.has(p.id) ? 'imposter' : 'civilian',
     alive: true,
   }))
+  const order = shuffle(players.map((p) => p.id))
   return {
+    mode: drawMode ? 'draw' : 'words',
     phase: 'reveal',
     round: 1,
     players,
@@ -63,8 +72,10 @@ export function createGame(lobbyPlayers, bank = WORD_BANK) {
     peeked: [], // ผู้สร้างที่ใช้ตาทิพย์ไปแล้วในเกมนี้ (คนละ 1 ครั้งต่อเกม)
     guess: null, // ตัวปลอมโดนโหวตออก → { by, options, status: 'pending'|'wrong'|'correct', picked }
     acks: [], // รหัสผู้เล่นที่กด "เข้าใจแล้ว" ในหน้าเปิดบทบาท
-    turnOrder: shuffle(players.map((p) => p.id)),
+    // โหมดวาดรูป: ลำดับเดิมวนซ้ำ DRAW_LAPS รอบ (หนึ่งช่อง = หนึ่งเส้น)
+    turnOrder: drawMode ? Array.from({ length: DRAW_LAPS }, () => order).flat() : order,
     turnIndex: 0,
+    strokes: [], // โหมดวาดรูป: เส้นที่วาดแล้วทั้งหมด { playerId, pts, w } สีดูจากที่นั่งของผู้เล่น
     clues: [], // คำใบ้ของรอบนี้: { playerId, text }
     history: [], // คำใบ้ของรอบก่อนหน้า
     votes: {}, // voterId -> targetId
@@ -105,6 +116,13 @@ export function validateClue(state, text, playerId) {
   const used = [...state.history.flat(), ...state.clues].map((c) => norm(c.text))
   if (used.includes(norm(t))) return 'clueUsed'
   return ''
+}
+
+/** โหมดวาดรูป: ไปตาถัดไป ถ้าครบทุกเส้นแล้วเข้าสู่การโหวต */
+function advanceDrawTurn(state) {
+  const turnIndex = state.turnIndex + 1
+  if (turnIndex >= state.turnOrder.length) return { ...state, turnIndex, phase: 'voting', votes: {} }
+  return { ...state, turnIndex }
 }
 
 /** ถ้าทุกคนที่ยังอยู่โหวตครบ → นับคะแนนแล้วไปหน้า elimination */
@@ -170,10 +188,11 @@ function removePlayer(state, playerId) {
   if (state.phase === 'reveal') return maybeStartClues(next)
 
   if (state.phase === 'clues') {
-    const idx = state.turnOrder.indexOf(playerId)
-    if (idx === -1) return next
+    if (!state.turnOrder.includes(playerId)) return next
     const turnOrder = state.turnOrder.filter((id) => id !== playerId)
-    const turnIndex = idx < state.turnIndex ? state.turnIndex - 1 : state.turnIndex
+    // ผู้เล่นหนึ่งคนอาจมีหลายช่องในลำดับ (โหมดวาดรูป) → ลดตำแหน่งตามจำนวนช่องที่หายไปก่อนตาปัจจุบัน
+    const removedBefore = state.turnOrder.slice(0, state.turnIndex).filter((id) => id === playerId).length
+    const turnIndex = state.turnIndex - removedBefore
     next = { ...next, turnOrder, turnIndex }
     if (turnIndex >= turnOrder.length) next = { ...next, phase: 'voting', votes: {} }
     return next
@@ -203,7 +222,7 @@ export function gameReducer(state, action) {
     }
 
     case 'SUBMIT_CLUE': {
-      if (state.phase !== 'clues') return state
+      if (state.phase !== 'clues' || state.mode === 'draw') return state
       const speakerId = state.turnOrder[state.turnIndex]
       if (action.playerId !== speakerId) return state
       if (validateClue(state, action.text, speakerId)) return state
@@ -226,9 +245,35 @@ export function gameReducer(state, action) {
       return maybeTally({ ...state, votes: { ...state.votes, [voter.id]: target.id } })
     }
 
+    case 'DRAW_STROKE': {
+      if (state.mode !== 'draw' || state.phase !== 'clues') return state
+      const speakerId = state.turnOrder[state.turnIndex]
+      if (action.playerId !== speakerId) return state
+      const stroke = sanitizeStroke(action.stroke)
+      if (!stroke) return state
+      const cur = state.pstats?.[speakerId] ?? { clues: 0, votes: 0, correct: 0 }
+      const pstats = { ...state.pstats, [speakerId]: { ...cur, clues: cur.clues + 1 } }
+      const strokes = [...state.strokes, { playerId: speakerId, ...stroke }]
+      return advanceDrawTurn({ ...state, strokes, pstats })
+    }
+
+    case 'DRAW_SKIP': {
+      // เซิร์ฟเวอร์ส่งเมื่อหมดเวลา ต้องตรงกับตาปัจจุบันเป๊ะ ๆ ไม่งั้นเป็นของเก่า (ข้าม)
+      if (state.mode !== 'draw' || state.phase !== 'clues') return state
+      const speakerId = state.turnOrder[state.turnIndex]
+      if (action.round !== state.round || action.turnIndex !== state.turnIndex || action.speaker !== speakerId) return state
+      return advanceDrawTurn(state)
+    }
+
     case 'CONTINUE': {
       if (state.phase !== 'elimination') return state
       if (state.guess?.status === 'pending') return state // รอตัวปลอมเดาคำก่อน
+      if (state.mode === 'draw') {
+        // โหมดวาดรูป: โหวตครั้งเดียวตัดสิน — จับตัวปลอมได้ (แล้วเดาคำไม่ถูก) พลเมืองชนะ จับผิดคน ตัวปลอมชนะ
+        const caught = getPlayer(state, state.lastResult?.eliminatedId)?.role === 'imposter'
+        const fakerLeft = alivePlayers(state).some((p) => p.role === 'imposter')
+        return { ...state, winner: caught || !fakerLeft ? 'civilians' : 'imposters', phase: 'gameover' }
+      }
       const winner = checkWinner(state.players)
       if (winner) return { ...state, winner, phase: 'gameover' }
       const aliveIds = state.players.filter((p) => p.alive).map((p) => p.id)
@@ -324,6 +369,9 @@ export function viewFor(state, playerId, creator = false) {
       : null,
     ackCount: state.acks.length,
     iAcked: state.acks.includes(playerId),
+    mode: state.mode ?? 'words',
+    strokes: state.strokes ?? [],
+    turnDeadline: state.phase === 'clues' ? (state.turnDeadline ?? null) : null,
     turnOrder: state.turnOrder,
     turnIndex: state.turnIndex,
     clues: state.clues,
