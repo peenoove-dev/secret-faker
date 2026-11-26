@@ -568,6 +568,7 @@ async function handleApi(req, res, url) {
   const body = await readBody(req, p === '/api/creator/import' ? 6_000_000 : p === '/api/auth/avatar' ? 120_000 : 10_000)
 
   if (p === '/api/auth/register') {
+    if (limited(`register:${clientIp(req)}`, 10, 10 * 60_000)) return json(res, 429, { error: 'tooFast' }), true
     const r = await accounts.register(body.username, body.password)
     if (r.error) return json(res, 400, { error: r.error }), true
     return json(res, 200, { token: r.token, account: accounts.publicAccount(r.account) }), true
@@ -582,7 +583,7 @@ async function handleApi(req, res, url) {
   if (!acc) return json(res, 401, { error: 'unauthorized' }), true
 
   if (p === '/api/auth/logout') {
-    accounts.logout(bearer(req))
+    await accounts.logout(bearer(req))
     return json(res, 200, { ok: true }), true
   }
   if (p === '/api/auth/profile') {
@@ -713,6 +714,11 @@ const server = http.createServer(async (req, res) => {
       const me = accounts.fromToken(bearer(req))
       res.setHeader('Cache-Control', 'no-store')
       return json(res, 200, { sort, ...leaderboard(sort, me?.id) })
+    }
+
+    if (req.method === 'GET' && url.pathname === '/api/health') {
+      res.setHeader('Cache-Control', 'no-store')
+      return json(res, 200, { ok: true, storage: store.mode, persistent: !store.ephemeral })
     }
 
     if (await handleApi(req, res, url)) return
@@ -895,5 +901,17 @@ setInterval(() => {
   const now = Date.now()
   for (const [k, b] of buckets) if (now > b.until) buckets.delete(k)
 }, 60_000).unref()
+
+// Render ส่ง SIGTERM ก่อนปิด/รีสตาร์ต → บันทึกข้อมูลให้เสร็จก่อนดับ
+for (const sig of ['SIGTERM', 'SIGINT']) {
+  process.on(sig, async () => {
+    try {
+      await store.flush()
+    } catch (e) {
+      console.error('[shutdown] flush failed:', e.message)
+    }
+    process.exit(0)
+  })
+}
 
 server.listen(PORT, () => console.log(`SECRET FAKER server listening on http://localhost:${PORT}`))

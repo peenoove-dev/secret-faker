@@ -14,7 +14,10 @@ export async function request(method, path, body, token) {
       body: body === undefined ? undefined : JSON.stringify(body),
     })
     const data = await res.json().catch(() => ({}))
-    return res.ok ? { ok: true, ...data } : { ok: false, error: data.error ?? 'badRequest', status: res.status }
+    if (res.ok) return { ok: true, ...data }
+    // 502/503/504 ที่ไม่มี JSON ตอบกลับ = เซิร์ฟเวอร์กำลังตื่น/ล่มชั่วคราว (เช่น Render แพลนฟรี) ไม่ใช่ข้อมูลผิด
+    if (res.status >= 500 && !data.error) return { ok: false, error: 'network', status: res.status }
+    return { ok: false, error: data.error ?? 'badRequest', status: res.status }
   } catch {
     return { ok: false, error: 'network' }
   }

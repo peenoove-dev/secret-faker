@@ -42,16 +42,27 @@ export function AuthProvider({ children }) {
       return
     }
     let cancelled = false
-    get('/api/auth/me', token).then((r) => {
-      if (cancelled) return
-      if (r.ok) setAccount(r.account)
-      else if (r.status === 401) {
-        write(TOKEN_KEY, null)
-        setToken(null)
-        setAccount(null)
+    ;(async () => {
+      // เซิร์ฟเวอร์ที่เพิ่งตื่น (Render ใช้เวลาราว 30–50 วิ) จะตอบ 502/ต่อไม่ได้ชั่วคราว → ลองใหม่เรื่อย ๆ
+      // ล้างโทเค็นเฉพาะเมื่อเซิร์ฟเวอร์ตอบ 401 จริง ๆ (โทเค็นหมดอายุ/ถูกเพิกถอน) — ไม่ใช่เพราะเน็ตหลุดหรือเซิร์ฟเวอร์ยังไม่พร้อม
+      for (let i = 0; i < 12; i++) {
+        const r = await get('/api/auth/me', token)
+        if (cancelled) return
+        if (r.ok) {
+          setAccount(r.account)
+          break
+        }
+        if (r.status === 401) {
+          write(TOKEN_KEY, null)
+          setToken(null)
+          setAccount(null)
+          break
+        }
+        await new Promise((res) => setTimeout(res, Math.min(1000 * (i + 1), 5000)))
+        if (cancelled) return
       }
       setReady(true)
-    })
+    })()
     return () => {
       cancelled = true
     }
