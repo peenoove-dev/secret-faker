@@ -1,19 +1,23 @@
 import { cx } from '../lib/utils'
+import { sfx } from '../lib/sound'
 
+// ปุ่มทุกแบบมี "ขอบล่างหนา" เหมือนปุ่มจริง กดแล้วยุบลงไป
 const VARIANTS = {
   primary:
-    'bg-gradient-to-r from-neon-purple to-neon-pink text-white shadow-glow-pink hover:brightness-110',
-  neon:
-    'bg-gradient-to-r from-neon-blue to-neon-violet text-white shadow-glow-blue hover:brightness-110',
+    'bg-gold text-ink shadow-btn-gold hover:-translate-y-px hover:shadow-btn-gold-up active:translate-y-[3px] active:shadow-[0_1px_0_0_#8a5f0b]',
+  paper:
+    'bg-paper text-ink shadow-btn-paper hover:-translate-y-px hover:shadow-btn-paper-up active:translate-y-[3px] active:shadow-[0_1px_0_0_#a39571]',
   secondary:
-    'border border-white/15 bg-white/5 text-slate-100 hover:border-neon-blue/60 hover:bg-white/10 hover:shadow-glow-blue',
-  ghost: 'text-slate-300 hover:bg-white/5 hover:text-white',
-  disabled: 'cursor-not-allowed bg-ink-700 text-slate-500 shadow-none',
+    'border-felt-500 bg-felt-800 text-paper shadow-btn-felt hover:-translate-y-px hover:bg-felt-700 hover:shadow-btn-felt-up active:translate-y-[3px] active:shadow-[0_1px_0_0_#061512]',
+  danger:
+    'bg-ember text-paper shadow-btn-ember hover:-translate-y-px active:translate-y-[3px] active:shadow-[0_1px_0_0_#6a1912]',
+  ghost: 'text-felt-200 hover:bg-felt-800 hover:text-paper',
+  disabled: 'cursor-not-allowed bg-felt-700 text-felt-300',
 }
 
 const SIZES = {
-  md: 'h-12 px-6 text-sm',
-  lg: 'h-14 px-8 text-base',
+  md: 'h-11 px-5 text-base',
+  lg: 'h-14 px-7 text-lg',
 }
 
 export default function Button({
@@ -23,14 +27,19 @@ export default function Button({
   className,
   disabled,
   children,
+  onClick,
   ...props
 }) {
   return (
     <button
       disabled={disabled}
+      onClick={(e) => {
+        sfx.click()
+        onClick?.(e)
+      }}
       className={cx(
-        'inline-flex items-center justify-center gap-2 rounded-2xl font-display font-bold uppercase tracking-wide',
-        'transition duration-200 active:scale-[0.97] focus:outline-none focus-visible:ring-2 focus-visible:ring-neon-blue',
+        'inline-flex items-center justify-center gap-2.5 rounded-xl border-2 border-transparent font-sans font-bold',
+        'transition-[transform,box-shadow,background-color] duration-100',
         SIZES[size],
         disabled ? VARIANTS.disabled : VARIANTS[variant],
         className,

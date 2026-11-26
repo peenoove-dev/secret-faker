@@ -2,7 +2,10 @@
 //  - POST /api/rooms                 สร้างห้อง
 //  - POST /api/rooms/:code/join      เข้าห้อง
 //  - GET  /api/rooms/:code/events    รับสถานะห้องแบบเรียลไทม์ (Server-Sent Events)
-//  - POST /api/rooms/:code/action    ส่งคำสั่ง (พร้อม/เริ่มเกม/ส่งคำใบ้/โหวต/ฯลฯ)
+//  - POST /api/rooms/:code/action    ส่งคำสั่ง (พร้อม/เริ่มเกม/ส่งคำใบ้/โหวต/แชต/ฯลฯ)
+//  - GET  /api/rooms/:code/check     ตรวจว่าตัวตนในห้องยังใช้ได้ไหม (ใช้ตอนการเชื่อมต่อหลุด)
+//  - GET  /api/rooms/public          รายชื่อห้องสาธารณะที่ยังเข้าได้
+//  - GET  /api/leaderboard           ตารางอันดับผู้เล่น
 //  - ไฟล์เว็บที่ build แล้ว (โฟลเดอร์ dist) ถูกเสิร์ฟจากที่นี่ด้วย
 
 import http from 'node:http'
@@ -19,6 +22,7 @@ import {
   viewFor,
 } from '../shared/gameLogic.js'
 import { WORD_BANK } from '../shared/wordBank.js'
+import { applyGameResult, levelFor } from '../shared/achievements.js'
 import { createStore } from './store.js'
 import { createAccounts, cleanDisplay } from './accounts.js'
 
@@ -31,6 +35,10 @@ const ROOM_TTL_MS = 6 * 60 * 60 * 1000 // ห้องที่ไม่มี�
 const MAX_ROOMS = 500
 const GUESS_MS = 45_000 // เวลาที่ตัวปลอมมีเดาคำหลังโดนโหวตออก
 const AVATAR_MAX_BYTES = 60_000
+const PING_MS = Number(process.env.PING_MS) || 15_000 // ส่ง ping ให้ client รู้ว่าการเชื่อมต่อยังมีชีวิต (client จะต่อใหม่เองถ้าเงียบเกิน ~40 วิ)
+const MAX_CONNS_PER_PLAYER = 4
+const CHAT_MAX_LEN = 200
+const CHAT_KEEP = 60
 const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789' // ไม่มี 0/O/1/I
 
 /** @type {Map<string, any>} */
@@ -56,6 +64,19 @@ function currentBank() {
 const randomId = () => crypto.randomBytes(4).toString('hex')
 const randomToken = () => crypto.randomBytes(16).toString('hex')
 
+/** จำกัดความถี่แบบหน้าต่างเวลา: คืน true ถ้า "เกินโควตา" */
+const buckets = new Map()
+function limited(key, max, windowMs) {
+  const now = Date.now()
+  const b = buckets.get(key)
+  if (!b || now > b.until) {
+    buckets.set(key, { n: 1, until: now + windowMs })
+    return false
+  }
+  b.n++
+  return b.n > max
+}
+
 function newCode() {
   for (;;) {
     let code = ''
@@ -80,6 +101,7 @@ function publicRoom(room) {
     name: room.name,
     maxPlayers: room.maxPlayers,
     isPrivate: room.isPrivate,
+    hostId: room.players.find((p) => p.isHost)?.id ?? null,
     inGame: !!room.game,
     players: room.players.map((p) => ({
       id: p.id,
@@ -96,9 +118,38 @@ function sendState(room, player) {
   if (!player.conns.size) return
   const payload = JSON.stringify({
     room: publicRoom(room),
-    game: room.game ? viewFor(room.game, player.id) : null,
+    game: room.game ? viewFor(room.game, player.id, isCreator(room, player.id)) : null,
   })
   for (const res of player.conns) res.write(`event: state\ndata: ${payload}\n\n`)
+}
+
+function pushEvent(player, event, data) {
+  if (!player.conns.size) return
+  const payload = `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`
+  for (const res of player.conns) res.write(payload)
+}
+
+/** เพิ่มข้อความแชต (หรือข้อความระบบ) แล้วส่งให้ทุกคนในห้อง */
+function addChat(room, msg) {
+  room.chatSeq = (room.chatSeq ?? 0) + 1
+  const full = { id: room.chatSeq, ts: Date.now(), ...msg }
+  room.chat.push(full)
+  if (room.chat.length > CHAT_KEEP) room.chat.splice(0, room.chat.length - CHAT_KEEP)
+  room.touched = Date.now()
+  room.players.forEach((p) => pushEvent(p, 'chat', full))
+}
+
+const cleanChat = (s) =>
+  String(s ?? '')
+    .replace(/[\u0000-\u001f\u007f]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, CHAT_MAX_LEN)
+
+function canChat(room, playerId) {
+  const g = room.game
+  if (!g || g.phase === 'gameover') return true
+  return !!g.players.find((p) => p.id === playerId)?.alive // ผู้ที่ตกรอบอ่านได้อย่างเดียว กันบอกใบ้
 }
 
 // ตั้ง/ล้างตัวจับเวลาตอนตัวปลอมเดาคำ (เรียกทุกครั้งก่อนส่งสถานะ)
@@ -120,25 +171,90 @@ function syncGuessTimer(room) {
   }
 }
 
-// บันทึกสถิติของผู้เล่นที่ล็อกอิน เมื่อเกมจบ (ครั้งเดียวต่อเกม)
+// บันทึกสถิติ/คะแนน/ความสำเร็จของผู้เล่นที่ล็อกอิน เมื่อเกมจบ (ครั้งเดียวต่อเกม)
 function recordStats(room) {
   const g = room.game
   if (!g || g.phase !== 'gameover' || g.statsDone) return
-  room.game = { ...g, statsDone: true }
+  const rewards = {}
+  let touchedAccounts = false
+  const seen = new Set() // บัญชีเดียวกันเปิดหลายแท็บในห้องเดียว นับคะแนนครั้งเดียว
   for (const p of g.players) {
     const acc = accounts.byId(room.accountOf.get(p.id))
-    if (!acc) continue
+    if (!acc || seen.has(acc.id)) continue
+    seen.add(acc.id)
     const spy = p.role === 'imposter'
-    const won = g.winner === (spy ? 'imposters' : 'civilians')
-    acc.stats.played++
-    if (won) acc.stats.wins++
-    if (spy) {
-      acc.stats.spyPlayed++
-      if (won) acc.stats.spyWins++
-    }
+    const ps = g.pstats?.[p.id] ?? { votes: 0, correct: 0 }
+    rewards[p.id] = applyGameResult(acc, {
+      won: g.winner === (spy ? 'imposters' : 'civilians'),
+      spy,
+      alive: p.alive,
+      guessedRight: g.guess?.status === 'correct' && g.guess.by === p.id,
+      playerCount: g.players.length,
+      votesCast: ps.votes,
+      correctVotes: ps.correct,
+    })
+    touchedAccounts = true
   }
-  accounts.save()
+  room.game = { ...g, statsDone: true, rewards }
+  if (touchedAccounts) {
+    leaderboardCache.clear()
+    accounts.save()
+  }
 }
+
+/* ------------------------------ leaderboard / public rooms ------------------------------ */
+
+const leaderboardCache = new Map() // sort → { at, rows }
+const SORTS = {
+  points: (a, b) => b.stats.points - a.stats.points || b.stats.wins - a.stats.wins,
+  wins: (a, b) => b.stats.wins - a.stats.wins || b.stats.points - a.stats.points,
+  winRate: (a, b) => b.stats.wins / b.stats.played - a.stats.wins / a.stats.played || b.stats.played - a.stats.played,
+  spyWins: (a, b) => b.stats.spyWins - a.stats.spyWins || b.stats.points - a.stats.points,
+}
+
+function leaderboard(sort, meId) {
+  let c = leaderboardCache.get(sort)
+  if (!c || Date.now() - c.at > 10_000) {
+    const pool = accounts.all().filter((a) => a.stats.played > 0 && (sort !== 'winRate' || a.stats.played >= 5))
+    const rows = pool.sort(SORTS[sort]).map((a, i) => ({
+      rank: i + 1,
+      id: a.id,
+      displayName: a.displayName,
+      avatarV: a.avatar ? a.avatarV : null,
+      level: levelFor(a.stats.points),
+      points: a.stats.points,
+      played: a.stats.played,
+      wins: a.stats.wins,
+      spyWins: a.stats.spyWins,
+      bestStreak: a.stats.bestStreak,
+      badges: Object.keys(a.achievements ?? {}).length,
+    }))
+    c = { at: Date.now(), rows }
+    leaderboardCache.set(sort, c)
+  }
+  return { top: c.rows.slice(0, 50), me: meId ? (c.rows.find((r) => r.id === meId) ?? null) : null, total: c.rows.length }
+}
+
+function listPublicRooms() {
+  return [...rooms.values()]
+    .filter((r) => !r.isPrivate && !r.game && r.players.length < r.maxPlayers && r.players.some((p) => p.conns.size))
+    .sort((a, b) => b.players.length - a.players.length || b.touched - a.touched)
+    .slice(0, 30)
+    .map((r) => {
+      const host = r.players.find((p) => p.isHost) ?? r.players[0]
+      return {
+        code: r.code,
+        name: r.name,
+        count: r.players.length,
+        maxPlayers: r.maxPlayers,
+        hostName: host.name,
+        hostId: host.id,
+        hostAvatarV: host.avatar ? host.avatarV : null,
+      }
+    })
+}
+
+const isCreator = (room, playerId) => !!accounts.byId(room.accountOf.get(playerId))?.creator
 
 function broadcast(room) {
   syncGuessTimer(room)
@@ -173,10 +289,12 @@ function removeFromRoom(room, pid) {
     rooms.delete(room.code)
     return
   }
+  addChat(room, { sys: 'leave', name: player.name })
   if (!room.players.some((p) => p.isHost)) {
     const next = room.players.find((p) => p.conns.size) ?? room.players[0]
     next.isHost = true
     next.ready = true
+    addChat(room, { sys: 'host', name: next.name })
   }
   broadcast(room)
 }
@@ -186,8 +304,24 @@ function removeFromRoom(room, pid) {
 function handleAction(room, player, body) {
   const type = body.type
   const game = room.game
+  if (limited(`act:${player.id}`, 40, 10_000)) return 'tooFast'
 
   switch (type) {
+    case 'CHAT': {
+      const text = cleanChat(body.text)
+      if (!text) return 'chatEmpty'
+      if (!canChat(room, player.id)) return 'chatMuted'
+      if (limited(`chat:${player.id}`, 6, 8_000)) return 'tooFast'
+      addChat(room, { pid: player.id, name: player.name, text })
+      return null // ไม่ต้อง broadcast สถานะเกมใหม่
+    }
+
+    case 'SET_PRIVACY':
+      if (!player.isHost) return 'notHost'
+      if (game) return 'gameStarted'
+      room.isPrivate = !!body.value
+      return ''
+
     case 'TOGGLE_READY':
       if (game) return 'gameStarted'
       if (player.isHost) return '' // เจ้าของห้องพร้อมอยู่แล้วเสมอ
@@ -233,9 +367,11 @@ function handleAction(room, player, body) {
     case 'SUBMIT_CLUE':
     case 'CAST_VOTE':
     case 'GUESS_WORD':
+    case 'CREATOR_PEEK':
     case 'CONTINUE': {
       if (!game) return 'badState'
       if (type === 'CONTINUE' && !player.isHost) return 'notHost'
+      if (type === 'CREATOR_PEEK' && !isCreator(room, player.id)) return 'notCreator'
       if (type === 'SUBMIT_CLUE') {
         const err = validateClue(game, body.text, player.id)
         if (err) return err
@@ -299,8 +435,14 @@ function readBody(req, limit = 10_000) {
 
 function serveStatic(req, res) {
   const url = new URL(req.url, 'http://x')
-  let file = path.join(DIST, decodeURIComponent(url.pathname))
-  if (!file.startsWith(DIST)) return json(res, 403, { error: 'forbidden' })
+  let pathname
+  try {
+    pathname = decodeURIComponent(url.pathname) // เช่น "/%" จะ throw — ต้องไม่ทำให้เซิร์ฟเวอร์ล้ม
+  } catch {
+    return json(res, 400, { error: 'badRequest' })
+  }
+  let file = path.join(DIST, pathname)
+  if (file !== DIST && !file.startsWith(DIST + path.sep)) return json(res, 403, { error: 'forbidden' })
   if (!fs.existsSync(file) || fs.statSync(file).isDirectory()) file = path.join(DIST, 'index.html')
   if (!fs.existsSync(file)) {
     res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8' })
@@ -484,6 +626,7 @@ async function handleApi(req, res, url) {
         avatarV: Number(a.avatarV) || 0,
         creator: !!a.creator,
         stats: a.stats && typeof a.stats === 'object' ? a.stats : {},
+        achievements: a.achievements && typeof a.achievements === 'object' ? a.achievements : {},
         createdAt: Number(a.createdAt) || Date.now(),
       }
       addedAccounts++
@@ -500,14 +643,38 @@ const server = http.createServer(async (req, res) => {
   res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS')
   if (req.method === 'OPTIONS') return res.writeHead(204).end()
 
-  const url = new URL(req.url, 'http://x')
-  if (!url.pathname.startsWith('/api/')) return serveStatic(req, res)
+  let url
+  try {
+    url = new URL(req.url, 'http://x')
+  } catch {
+    return json(res, 400, { error: 'badRequest' })
+  }
+  if (!url.pathname.startsWith('/api/')) {
+    try {
+      return serveStatic(req, res)
+    } catch {
+      if (!res.headersSent) return json(res, 500, { error: 'serverError' })
+      return res.end()
+    }
+  }
 
   try {
+    if (req.method === 'GET' && url.pathname === '/api/rooms/public') {
+      res.setHeader('Cache-Control', 'no-store')
+      return json(res, 200, { rooms: listPublicRooms() })
+    }
+    if (req.method === 'GET' && url.pathname === '/api/leaderboard') {
+      const sort = Object.hasOwn(SORTS, url.searchParams.get('sort')) ? url.searchParams.get('sort') : 'points'
+      const me = accounts.fromToken(bearer(req))
+      res.setHeader('Cache-Control', 'no-store')
+      return json(res, 200, { sort, ...leaderboard(sort, me?.id) })
+    }
+
     if (await handleApi(req, res, url)) return
 
     // สร้างห้อง
     if (req.method === 'POST' && url.pathname === '/api/rooms') {
+      if (limited(`create:${clientIp(req)}`, 12, 10 * 60_000)) return json(res, 429, { error: 'tooFast' })
       const body = await readBody(req)
       const acc = accounts.fromToken(body.auth)
       const nickname = acc ? cleanDisplay(acc.displayName) : cleanName(body.nickname)
@@ -524,6 +691,8 @@ const server = http.createServer(async (req, res) => {
         players: [host],
         accountOf: new Map(acc ? [[host.id, acc.id]] : []),
         game: null,
+        chat: [],
+        chatSeq: 0,
         touched: Date.now(),
       }
       rooms.set(room.code, room)
@@ -531,7 +700,7 @@ const server = http.createServer(async (req, res) => {
       return json(res, 200, { code: room.code, playerId: host.id, token: host.token })
     }
 
-    const m = url.pathname.match(/^\/api\/rooms\/([A-Za-z0-9]{6})\/(join|events|action|avatar(?:\/[a-f0-9]+)?)$/)
+    const m = url.pathname.match(/^\/api\/rooms\/([A-Za-z0-9]{6})\/(join|events|action|check|avatar(?:\/[a-f0-9]+)?)$/)
     if (!m) return json(res, 404, { error: 'notFound' })
     const room = rooms.get(m[1].toUpperCase())
     const route = m[2]
@@ -577,6 +746,7 @@ const server = http.createServer(async (req, res) => {
 
     // เข้าห้อง
     if (req.method === 'POST' && route === 'join') {
+      if (limited(`join:${clientIp(req)}`, 40, 60_000)) return json(res, 429, { error: 'tooFast' })
       const body = await readBody(req)
       const acc = accounts.fromToken(body.auth)
       const nickname = acc ? cleanDisplay(acc.displayName) : cleanName(body.nickname)
@@ -592,14 +762,27 @@ const server = http.createServer(async (req, res) => {
       if (acc) room.accountOf.set(player.id, acc.id)
       room.players.push(player)
       scheduleGrace(room, player)
+      addChat(room, { sys: 'join', name: player.name })
       broadcast(room)
       return json(res, 200, { code: room.code, playerId: player.id, token: player.token })
+    }
+
+    // ตรวจว่าตัวตนในห้องยังใช้ได้ (client เรียกตอน SSE ขาดแล้วไม่แน่ใจว่าเป็นแค่เน็ตหลุดหรือโดนเตะ)
+    if (req.method === 'GET' && route === 'check') {
+      const player = auth(room, url.searchParams.get('pid'), url.searchParams.get('token'))
+      if (!player) return json(res, room ? 401 : 404, { error: room ? 'unauthorized' : 'roomNotFound' })
+      return json(res, 200, { ok: true })
     }
 
     // รับสถานะ (SSE)
     if (req.method === 'GET' && route === 'events') {
       const player = auth(room, url.searchParams.get('pid'), url.searchParams.get('token'))
-      if (!player) return json(res, 401, { error: room ? 'unauthorized' : 'roomNotFound' })
+      if (!player) return json(res, room ? 401 : 404, { error: room ? 'unauthorized' : 'roomNotFound' })
+      while (player.conns.size >= MAX_CONNS_PER_PLAYER) {
+        const oldest = player.conns.values().next().value // เปิดซ้อนหลายแท็บ/ต่อใหม่รัว ๆ → ตัดอันเก่าสุด
+        player.conns.delete(oldest)
+        oldest.end()
+      }
       res.writeHead(200, {
         'Content-Type': 'text/event-stream',
         'Cache-Control': 'no-cache, no-transform',
@@ -609,7 +792,8 @@ const server = http.createServer(async (req, res) => {
       res.write('retry: 2000\n\n')
       clearTimeout(player.timer)
       player.conns.add(res)
-      const ping = setInterval(() => res.write(': ping\n\n'), 20_000)
+      const ping = setInterval(() => res.write('event: ping\ndata: 1\n\n'), PING_MS)
+      res.on('error', () => {})
       req.on('close', () => {
         clearInterval(ping)
         player.conns.delete(res)
@@ -620,6 +804,7 @@ const server = http.createServer(async (req, res) => {
           }
         }
       })
+      pushEvent(player, 'chat-history', room.chat) // ประวัติแชตให้คนที่เพิ่งเข้า/ต่อใหม่ (ข้อความ id ซ้ำ client จะข้ามเอง)
       broadcast(room) // ให้คนอื่นเห็นว่าเรากลับมาออนไลน์ + ส่งสถานะให้เรา
       return
     }
@@ -630,8 +815,8 @@ const server = http.createServer(async (req, res) => {
       const player = auth(room, body.pid, body.token)
       if (!player) return json(res, 401, { error: room ? 'unauthorized' : 'roomNotFound' })
       const error = handleAction(room, player, body)
-      if (error) return json(res, 400, { error })
-      if (rooms.get(room.code) === room) broadcast(room)
+      if (error) return json(res, error === 'tooFast' ? 429 : 400, { error })
+      if (error === '' && rooms.get(room.code) === room) broadcast(room) // null = แชตอย่างเดียว ไม่ต้องส่งสถานะใหม่
       return json(res, 200, { ok: true })
     }
 
@@ -654,5 +839,15 @@ setInterval(() => {
     }
   }
 }, 10 * 60 * 1000).unref()
+
+// ข้อผิดพลาดที่หลุดมา (เช่น เขียนลงซ็อกเก็ตที่ปิดไปแล้ว) ต้องไม่ทำให้ทั้งเซิร์ฟเวอร์ล่ม — ห้องของทุกคนอยู่ในหน่วยความจำ
+process.on('uncaughtException', (e) => console.error('[uncaught]', e))
+process.on('unhandledRejection', (e) => console.error('[unhandled]', e))
+
+// ล้างตัวนับ rate limit ที่หมดอายุ
+setInterval(() => {
+  const now = Date.now()
+  for (const [k, b] of buckets) if (now > b.until) buckets.delete(k)
+}, 60_000).unref()
 
 server.listen(PORT, () => console.log(`SECRET FAKER server listening on http://localhost:${PORT}`))

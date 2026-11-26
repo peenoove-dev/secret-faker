@@ -37,11 +37,11 @@ export default function LoginPage() {
 
   return (
     <PageShell>
-      <div className="animate-fade-up">
+      <div>
         <Logo className="mb-8" />
 
-        <form onSubmit={submit} className="card space-y-5 p-6 sm:p-8">
-          <div className="grid grid-cols-2 gap-2 rounded-2xl bg-ink-900/70 p-1">
+        <form onSubmit={submit} className="panel space-y-5 p-6 sm:p-8">
+          <div className="grid grid-cols-2 gap-1.5 rounded-xl border-2 border-felt-600 bg-felt-950 p-1">
             {['login', 'register'].map((m) => (
               <button
                 key={m}
@@ -51,8 +51,8 @@ export default function LoginPage() {
                   setError('')
                 }}
                 className={cx(
-                  'h-11 rounded-xl font-display text-sm font-bold transition',
-                  mode === m ? 'bg-gradient-to-r from-neon-blue to-neon-violet text-white' : 'text-slate-400 hover:text-white',
+                  'h-11 rounded-lg text-base font-bold transition-colors',
+                  mode === m ? 'bg-gold text-ink shadow-[0_2px_0_0_#8a5f0b]' : 'text-felt-200 hover:bg-felt-800 hover:text-paper',
                 )}
               >
                 {t(`auth.${m}`)}
@@ -85,20 +85,20 @@ export default function LoginPage() {
             }}
           />
 
-          <Button type="submit" variant="neon" className="w-full" disabled={busy || !username || !password}>
+          <Button type="submit" variant="paper" className="w-full" disabled={busy || !username || !password}>
             {busy ? t('auth.loading') : mode === 'login' ? t('auth.submitLogin') : t('auth.submitRegister')}
           </Button>
         </form>
 
-        <div className="mt-5 text-center">
+        <div className="mt-6 text-center">
           <button
             type="button"
             onClick={playGuest}
-            className="text-sm font-bold text-slate-300 underline-offset-4 transition hover:text-neon-blue hover:underline"
+            className="text-base font-bold text-gold underline decoration-2 underline-offset-4 hover:text-gold-soft"
           >
             {t('auth.guest')}
           </button>
-          <p className="mt-1 text-xs text-slate-500">{t('auth.guestNote')}</p>
+          <p className="mt-1 text-[15px] text-felt-300">{t('auth.guestNote')}</p>
         </div>
       </div>
     </PageShell>

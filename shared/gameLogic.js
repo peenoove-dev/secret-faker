@@ -59,6 +59,8 @@ export function createGame(lobbyPlayers, bank = WORD_BANK) {
     category: cat.category, // { th, en }
     word, // { th, en }  — ห้ามส่งให้ Faker จนกว่าเกมจะจบ
     candidates, // คำที่ตัวปลอมเห็นเป็นตัวช่วย (รวมคำลับ) — ส่งให้ตัวปลอมเท่านั้น
+    pstats: Object.fromEntries(lobbyPlayers.map((p) => [p.id, { clues: 0, votes: 0, correct: 0 }])), // สถิติรายคน (ใช้ให้คะแนน/สรุปตอนจบ)
+    peeked: [], // ผู้สร้างที่ใช้ตาทิพย์ไปแล้วในเกมนี้ (คนละ 1 ครั้งต่อเกม)
     guess: null, // ตัวปลอมโดนโหวตออก → { by, options, status: 'pending'|'wrong'|'correct', picked }
     acks: [], // รหัสผู้เล่นที่กด "เข้าใจแล้ว" ในหน้าเปิดบทบาท
     turnOrder: shuffle(players.map((p) => p.id)),
@@ -118,6 +120,12 @@ function maybeTally(state) {
   const top = Object.keys(tally).filter((id) => tally[id] === max)
   const eliminatedId = top.length === 1 ? top[0] : pick(top)
   const out = getPlayer(state, eliminatedId)
+  const pstats = { ...state.pstats }
+  for (const [voterId, targetId] of Object.entries(votes)) {
+    const cur = pstats[voterId] ?? { clues: 0, votes: 0, correct: 0 }
+    const hit = getPlayer(state, targetId)?.role === 'imposter'
+    pstats[voterId] = { ...cur, votes: cur.votes + 1, correct: cur.correct + (hit ? 1 : 0) }
+  }
   let guess = null
   if (out?.role === 'imposter') {
     const wrong = shuffle(state.candidates.filter((w) => w.th !== state.word.th)).slice(0, GUESS_OPTION_COUNT - 1)
@@ -127,6 +135,7 @@ function maybeTally(state) {
   return {
     ...state,
     guess,
+    pstats,
     phase: 'elimination',
     players: state.players.map((p) => (p.id === eliminatedId ? { ...p, alive: false } : p)),
     lastResult: { eliminatedId, tally, votes, tie: top.length > 1 },
@@ -200,10 +209,12 @@ export function gameReducer(state, action) {
       if (validateClue(state, action.text, speakerId)) return state
       const clues = [...state.clues, { playerId: speakerId, text: action.text.trim() }]
       const turnIndex = state.turnIndex + 1
+      const cur = state.pstats?.[speakerId] ?? { clues: 0, votes: 0, correct: 0 }
+      const pstats = { ...state.pstats, [speakerId]: { ...cur, clues: cur.clues + 1 } }
       if (turnIndex >= state.turnOrder.length) {
-        return { ...state, clues, turnIndex, phase: 'voting', votes: {} }
+        return { ...state, clues, pstats, turnIndex, phase: 'voting', votes: {} }
       }
-      return { ...state, clues, turnIndex }
+      return { ...state, clues, pstats, turnIndex }
     }
 
     case 'CAST_VOTE': {
@@ -233,6 +244,12 @@ export function gameReducer(state, action) {
         lastResult: null,
         guess: null,
       }
+    }
+
+    case 'CREATOR_PEEK': {
+      // เซิร์ฟเวอร์ตรวจแล้วว่าเป็นผู้สร้างก่อนเรียก action นี้
+      if (state.phase === 'gameover' || state.peeked.includes(action.playerId)) return state
+      return { ...state, peeked: [...state.peeked, action.playerId] }
     }
 
     case 'GUESS_WORD': {
@@ -266,7 +283,7 @@ export function gameReducer(state, action) {
  *  - คำลับ: Faker จะไม่ได้รับจนกว่าเกมจะจบ
  *  - โหวต: ระหว่างโหวตเห็นแค่ของตัวเองกับจำนวนคนที่โหวตแล้ว
  */
-export function viewFor(state, playerId) {
+export function viewFor(state, playerId, creator = false) {
   const over = state.phase === 'gameover'
   const me = getPlayer(state, playerId)
   const players = state.players.map((p) => {
@@ -294,6 +311,17 @@ export function viewFor(state, playerId) {
           options: state.guess.by === playerId && state.guess.status === 'pending' ? state.guess.options : null,
         }
       : null,
+    // ฟังก์ชันพิเศษเฉพาะผู้สร้าง (null สำหรับผู้เล่นทั่วไป)
+    cheat: creator
+      ? {
+          word: state.word,
+          peeked: state.peeked.includes(playerId),
+          fakerIds: state.peeked.includes(playerId)
+            ? state.players.filter((p) => p.role === 'imposter').map((p) => p.id)
+            : null,
+          votes: voting ? state.votes : null,
+        }
+      : null,
     ackCount: state.acks.length,
     iAcked: state.acks.includes(playerId),
     turnOrder: state.turnOrder,
@@ -304,5 +332,10 @@ export function viewFor(state, playerId) {
     voteCount: Object.keys(state.votes).length,
     lastResult: state.lastResult,
     winner: state.winner,
+    // สรุปท้ายเกม + รางวัลของเราเอง (มีเมื่อเกมจบเท่านั้น)
+    summary: over
+      ? state.players.map((p) => ({ id: p.id, ...(state.pstats?.[p.id] ?? { clues: 0, votes: 0, correct: 0 }) }))
+      : null,
+    rewards: over ? (state.rewards?.[playerId] ?? null) : null,
   }
 }

@@ -4,7 +4,7 @@ import { fileToAvatar } from '../lib/image'
 import { useRoom } from '../context/RoomContext'
 import { AvatarFace } from './game/Avatar'
 import { useLang } from '../i18n/LanguageContext'
-import { CrownIcon } from './Icons'
+import { CameraIcon, CrownIcon, SUITS, SuitIcon } from './Icons'
 
 export function PlayerCard({ player, index, isMe }) {
   const { t } = useLang()
@@ -36,15 +36,25 @@ export function PlayerCard({ player, index, isMe }) {
   return (
     <div
       className={cx(
-        'relative flex flex-col items-center rounded-3xl border bg-ink-800/70 px-3 pb-4 pt-5 animate-pop-in',
-        isMe ? 'border-neon-blue/50 shadow-glow-blue' : 'border-white/10',
-        offline && 'opacity-50',
+        'paper relative flex flex-col items-center px-3 pb-4 pt-5 animate-pop-in',
+        isMe && 'ring-4 ring-gold ring-offset-2 ring-offset-felt-900',
+        offline && 'opacity-60 grayscale',
       )}
-      style={{ animationDelay: `${index * 70}ms` }}
     >
+      {/* แต้มไพ่ประจำที่นั่ง */}
+      <span
+        className={cx('absolute left-2.5 top-2.5', SUITS[index % SUITS.length].red ? 'text-ember' : 'text-ink')}
+        aria-hidden
+      >
+        <SuitIcon index={index} size={16} />
+      </span>
+
       {player.isHost && (
-        <span className="absolute -top-3 grid h-7 w-7 place-items-center rounded-full bg-amber-400 text-amber-950 shadow-lg shadow-amber-400/40">
-          <CrownIcon width={14} height={14} />
+        <span
+          title="Host"
+          className="absolute right-2 top-2 grid h-7 w-7 place-items-center rounded-full border-2 border-ink bg-gold text-ink"
+        >
+          <CrownIcon size={14} />
         </span>
       )}
 
@@ -53,7 +63,7 @@ export function PlayerCard({ player, index, isMe }) {
           id={player.id}
           name={player.name}
           colorIndex={index}
-          className="h-16 w-16 rounded-2xl text-2xl sm:h-[72px] sm:w-[72px]"
+          className="h-[68px] w-[68px] rounded-xl text-3xl sm:h-[76px] sm:w-[76px]"
         />
         {isMe && (
           <>
@@ -63,50 +73,46 @@ export function PlayerCard({ player, index, isMe }) {
               disabled={busy}
               onClick={() => fileRef.current?.click()}
               aria-label={t('profile.change')}
-              className="absolute -bottom-1 -left-1 grid h-7 w-7 place-items-center rounded-full border-2 border-ink-800 bg-neon-blue text-sm shadow-lg transition hover:brightness-110 active:scale-90 disabled:opacity-50"
+              className="absolute -bottom-2 -right-2 grid h-8 w-8 place-items-center rounded-full border-2 border-paper bg-ink text-paper transition-transform hover:scale-105 active:scale-90 disabled:opacity-50"
             >
-              {busy ? '…' : '📷'}
+              {busy ? <span className="text-xs">…</span> : <CameraIcon size={15} />}
             </button>
           </>
         )}
-        <span
-          className={cx(
-            'absolute -bottom-1 -right-1 h-4 w-4 rounded-full border-2 border-ink-800',
-            player.ready ? 'bg-neon-green' : 'bg-slate-500',
-          )}
-        />
       </div>
 
-      <p className="mt-3 max-w-full truncate font-display text-sm font-bold text-white">
+      <p className="mt-3.5 max-w-full truncate font-display text-lg leading-tight text-ink">
         {player.name}
-        {isMe && <span className="ml-1 text-neon-blue">({t('common.you')})</span>}
       </p>
-      <p
-        className={cx(
-          'mt-1 font-mono text-[10px] font-bold uppercase tracking-widest',
-          offline ? 'text-amber-300' : player.ready ? 'text-neon-green' : 'text-slate-500',
+      {isMe && <p className="text-sm font-semibold text-ink-soft">({t('common.you')})</p>}
+
+      <div className="mt-2 flex h-8 items-center">
+        {offline ? (
+          <span className="text-sm font-bold text-ember-deep">{t('common.offline')}</span>
+        ) : player.ready ? (
+          <span key="ready" className="stamp animate-stamp border-mint-deep text-base text-mint-deep">
+            {t('lobby.readyLabel')}
+          </span>
+        ) : (
+          <span className="text-sm font-semibold text-ink-faint">{t('lobby.notReady')}</span>
         )}
-      >
-        {offline ? t('common.offline') : player.ready ? t('lobby.readyLabel') : t('lobby.notReady')}
-      </p>
+      </div>
+
       {isMe && player.avatarV && (
-        <button type="button" onClick={removeAvatar} className="mt-1 text-[10px] text-slate-500 underline hover:text-slate-300">
+        <button type="button" onClick={removeAvatar} className="mt-1 text-sm text-ink-soft underline hover:text-ink">
           {t('profile.remove')}
         </button>
       )}
-      {err && <p className="mt-1 text-center text-[10px] text-neon-pink">{err}</p>}
+      {err && <p className="mt-1 text-center text-sm font-semibold text-ember-deep">{err}</p>}
     </div>
   )
 }
 
-export function EmptySlot({ index }) {
+export function EmptySlot() {
   const { t } = useLang()
   return (
-    <div
-      className="flex min-h-[148px] items-center justify-center rounded-3xl border border-dashed border-white/10 bg-white/[0.02] animate-pop-in"
-      style={{ animationDelay: `${index * 70}ms` }}
-    >
-      <span className="text-xs italic text-slate-600">{t('lobby.waiting')}</span>
+    <div className="flex min-h-[188px] items-center justify-center rounded-xl border-2 border-dashed border-felt-600 px-3">
+      <span className="text-center text-base text-felt-300">{t('lobby.waiting')}</span>
     </div>
   )
 }

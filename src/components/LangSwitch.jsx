@@ -12,7 +12,7 @@ export default function LangSwitch({ className }) {
     <div
       role="group"
       aria-label="Language"
-      className={cx('inline-flex rounded-xl border border-white/10 bg-ink-900/80 p-1 text-xs font-bold', className)}
+      className={cx('inline-flex h-9 rounded-lg border-2 border-felt-600 bg-felt-950 p-0.5 text-sm font-bold', className)}
     >
       {opts.map((o) => (
         <button
@@ -21,8 +21,8 @@ export default function LangSwitch({ className }) {
           onClick={() => setLang(o.v)}
           aria-pressed={lang === o.v}
           className={cx(
-            'rounded-lg px-3 py-1.5 transition',
-            lang === o.v ? 'bg-neon-violet text-white' : 'text-slate-400 hover:text-white',
+            'rounded-md px-3 transition-colors',
+            lang === o.v ? 'bg-paper text-ink' : 'text-felt-200 hover:text-paper',
           )}
         >
           {o.label}

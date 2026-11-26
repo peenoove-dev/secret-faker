@@ -8,23 +8,82 @@
   #root {
     min-height: 100%;
   }
+  html {
+    overflow-x: clip;
+  }
   body {
-    @apply bg-ink-950 font-sans text-slate-100 antialiased;
+    @apply bg-felt-900 font-sans text-[17px] leading-relaxed text-paper antialiased;
+    overflow-x: clip; /* การ์ดที่เอียง/มีวงแหวนไม่ให้ดันหน้าให้เลื่อนข้าง */
   }
   ::selection {
-    @apply bg-neon-purple/40;
+    @apply bg-gold/50 text-ink;
+  }
+  :focus-visible {
+    outline: 2px solid #8ec5f0;
+    outline-offset: 2px;
+  }
+  /* ฟอนต์ Chonburi มีน้ำหนักเดียว ห้ามให้เบราว์เซอร์ทำตัวหนาปลอม */
+  .font-display {
+    font-weight: 400;
+    letter-spacing: 0;
   }
 }
 
 @layer components {
-  .card {
-    @apply rounded-3xl border border-white/10 bg-ink-800/70 backdrop-blur-md;
+  /* แผงบนผ้าสักหลาด: ใช้จัดกลุ่มเนื้อหาทั่วไป */
+  .panel {
+    @apply rounded-2xl border-2 border-felt-600 bg-felt-800;
+    box-shadow: 0 1px 0 0 rgba(255, 255, 255, 0.05) inset;
   }
-  .label-tiny {
-    @apply font-mono text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400;
+  /* การ์ดกระดาษ: ของที่ "จับต้องได้" ในเกม เช่น ผู้เล่น ตัวเลือกโหวต ใบรหัสห้อง */
+  .paper {
+    @apply rounded-xl bg-paper text-ink shadow-card;
+    box-shadow:
+      3px 4px 0 0 #04120f,
+      inset 0 0 0 1px rgba(42, 31, 26, 0.08);
   }
-  .text-gradient {
-    @apply bg-gradient-to-r from-neon-blue via-neon-purple to-neon-pink bg-clip-text text-transparent;
+  .paper-flat {
+    @apply rounded-xl bg-paper text-ink;
+    box-shadow: inset 0 0 0 1px rgba(42, 31, 26, 0.1);
+  }
+  /* ป้ายกำกับหัวข้อเล็ก: ตัวธรรมดา ไม่ใช้ตัวพิมพ์ใหญ่ */
+  .label {
+    @apply text-[15px] font-semibold text-felt-200;
+  }
+  .label-ink {
+    @apply text-[15px] font-semibold text-ink-soft;
+  }
+  .muted {
+    @apply text-felt-300;
+  }
+  .chip {
+    @apply inline-flex items-center gap-1.5 rounded-full border-2 border-felt-600 bg-felt-950 px-3 py-1 text-sm font-semibold text-paper;
+  }
+  /* หลังไพ่: ลายข้าวหลามตัดสีแดงเข้ม */
+  .card-back {
+    background-color: #9b2d24;
+    background-image:
+      url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='18' height='18'%3E%3Cpath d='M9 1 17 9 9 17 1 9Z' fill='none' stroke='%23f2e9d8' stroke-opacity='.32' stroke-width='1.2'/%3E%3C/svg%3E"),
+      linear-gradient(0deg, #9b2d24, #9b2d24);
+    background-position: center;
+    border-radius: 12px;
+    box-shadow:
+      inset 0 0 0 5px #f2e9d8,
+      inset 0 0 0 7px #9b2d24,
+      3px 4px 0 0 #04120f;
+  }
+  /* ตราประทับเอียง ๆ */
+  .stamp {
+    @apply inline-block -rotate-[9deg] rounded-md border-[3px] px-2.5 py-0.5 font-display text-lg;
+    border-style: double;
+  }
+  .rule-lines {
+    background-image: repeating-linear-gradient(
+      to bottom,
+      transparent 0,
+      transparent calc(100% - 1px),
+      rgba(42, 31, 26, 0.16) calc(100% - 1px)
+    );
   }
 }
 
@@ -33,9 +92,40 @@
 }
 
 /* ภาษาไทย: ไม่ใส่ระยะห่างตัวอักษร เพราะจะทำให้สระ/วรรณยุกต์แยกจากพยัญชนะ */
-html[lang='th'] .label-tiny,
 html[lang='th'] .tracking-wide,
 html[lang='th'] .tracking-wider,
 html[lang='th'] .tracking-widest {
   letter-spacing: 0 !important;
+}
+
+/* พลิกไพ่ 3 มิติ */
+.flip-scene {
+  perspective: 1200px;
+}
+.flip-inner {
+  display: grid;
+  transform-style: preserve-3d;
+  transition: transform 0.55s cubic-bezier(0.3, 0.7, 0.2, 1);
+}
+.flip-inner[data-flipped='true'] {
+  transform: rotateY(180deg);
+}
+.flip-face {
+  grid-area: 1 / 1;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+.flip-face.back {
+  transform: rotateY(180deg);
+}
+
+/* ผู้ใช้ที่ตั้งค่า "ลดการเคลื่อนไหว" ในระบบ: ปิดแอนิเมชันที่ไม่จำเป็น */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }

@@ -45,18 +45,18 @@ export default function JoinRoomPage() {
 
   return (
     <PageShell backTo="/">
-      <div className="animate-fade-up">
+      <div>
         <Logo className="mb-8" />
 
-        <form onSubmit={submit} className="card space-y-5 p-6 sm:p-8">
-          <h2 className="font-display text-2xl font-bold">{t('join.title')}</h2>
+        <form onSubmit={submit} className="panel space-y-5 p-6 sm:p-8">
+          <h2 className="font-display text-3xl leading-tight">{t('join.title')}</h2>
 
           <TextField
             label={t('join.code')}
             placeholder="6A8FMA"
             value={code}
             error={errors.code}
-            inputClassName="text-center font-mono text-2xl font-bold uppercase tracking-[0.3em]"
+            inputClassName="text-center font-display text-3xl uppercase tracking-[0.3em]"
             onChange={(e) => {
               setCode(normalizeRoomCode(e.target.value))
               setErrors((x) => ({ ...x, code: undefined }))
@@ -64,9 +64,9 @@ export default function JoinRoomPage() {
           />
 
           {account ? (
-            <p className="rounded-2xl border border-white/10 bg-ink-900/60 px-4 py-3 text-sm text-slate-300">
-              {t('auth.playingAs')} <b className="text-white">{account.displayName}</b>
-              {errors.nickname && <span className="mt-2 block text-xs font-medium text-red-400">{errors.nickname}</span>}
+            <p className="rounded-lg border-2 border-felt-600 bg-felt-950 px-4 py-3 text-base text-felt-200">
+              {t('auth.playingAs')} <b className="text-paper">{account.displayName}</b>
+              {errors.nickname && <span className="mt-2 block text-[15px] font-semibold text-ember-soft">{errors.nickname}</span>}
             </p>
           ) : (
             <TextField
@@ -82,11 +82,11 @@ export default function JoinRoomPage() {
             />
           )}
 
-          <Button type="submit" variant="neon" className="w-full" disabled={busy} icon={<LoginIcon />}>
+          <Button type="submit" variant="paper" className="w-full" disabled={busy} icon={<LoginIcon />}>
             {busy ? t('join.loading') : t('join.submit')}
           </Button>
 
-          <p className="text-center text-xs text-slate-500">{t('join.hint')}</p>
+          <p className="text-center text-[15px] text-felt-300">{t('join.hint')}</p>
         </form>
       </div>
     </PageShell>

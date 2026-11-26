@@ -1,12 +1,13 @@
 import { Link } from 'react-router-dom'
 import Background from './Background'
 import LangSwitch from './LangSwitch'
+import SoundToggle from './SoundToggle'
 import ConnectionBanner from './ConnectionBanner'
 import { ArrowLeftIcon } from './Icons'
 import { useLang } from '../i18n/LanguageContext'
 import { cx } from '../lib/utils'
 
-/** Common page wrapper: backdrop + centered container + back link + language switch. */
+/** กรอบหน้าทั่วไป: พื้นหลังโต๊ะ + ปุ่มย้อนกลับ + สลับเสียง/ภาษา */
 export default function PageShell({ children, backTo, maxWidth = 'max-w-md', className }) {
   const { t } = useLang()
   return (
@@ -20,18 +21,21 @@ export default function PageShell({ children, backTo, maxWidth = 'max-w-md', cla
           className,
         )}
       >
-        <div className="mb-6 flex items-center justify-between">
+        <div className="mb-8 flex items-center justify-between">
           {backTo ? (
             <Link
               to={backTo}
-              className="inline-flex w-fit items-center gap-2 text-sm font-medium text-slate-400 transition hover:text-neon-blue"
+              className="inline-flex h-10 w-fit items-center gap-2 rounded-lg pr-3 text-base font-semibold text-felt-200 hover:text-paper"
             >
-              <ArrowLeftIcon width={16} height={16} /> {t('common.back')}
+              <ArrowLeftIcon size={18} /> {t('common.back')}
             </Link>
           ) : (
             <span />
           )}
-          <LangSwitch />
+          <div className="flex items-center gap-2">
+            <SoundToggle />
+            <LangSwitch />
+          </div>
         </div>
         {children}
       </main>

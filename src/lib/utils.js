@@ -1,13 +1,13 @@
-// Avatar tile colors (Tailwind gradient classes)
+// สีพื้นของกรอบรูปผู้เล่น (สีทึบ ไม่ไล่เฉด) — ชื่อคลาสต้องเขียนเต็มเพื่อให้ Tailwind เจอ
 export const AVATAR_COLORS = [
-  'from-sky-400 to-cyan-500',
-  'from-indigo-500 to-violet-500',
-  'from-violet-500 to-purple-600',
-  'from-orange-400 to-orange-600',
-  'from-fuchsia-500 to-pink-500',
-  'from-emerald-400 to-teal-500',
-  'from-rose-400 to-red-500',
-  'from-amber-300 to-yellow-500',
+  'bg-av-1',
+  'bg-av-2',
+  'bg-av-3',
+  'bg-av-4',
+  'bg-av-5',
+  'bg-av-6',
+  'bg-av-7',
+  'bg-av-8',
 ]
 
 export const ROOM_CODE_LENGTH = 6
@@ -31,4 +31,11 @@ export function initial(name) {
 
 export function cx(...classes) {
   return classes.filter(Boolean).join(' ')
+}
+
+/** เลือกสีจากข้อความ (ใช้กับบัญชีที่ไม่มี index) */
+export function colorFromText(text = '') {
+  let h = 0
+  for (const ch of text) h = (h * 31 + ch.charCodeAt(0)) >>> 0
+  return AVATAR_COLORS[h % AVATAR_COLORS.length]
 }

@@ -1,31 +1,37 @@
 import { getPlayer } from '../../../shared/gameLogic.js'
 import { useLang } from '../../i18n/LanguageContext'
 import Avatar from './Avatar'
+import { cx } from '../../lib/utils'
 
-/** Chat-style list of every clue given so far, grouped by round. */
+/** รายการคำใบ้ทั้งหมดแยกตามรอบ — แต่ละคำเป็นโน้ตกระดาษที่วางเอียงเล็กน้อย */
 export default function ClueBoard({ game }) {
   const { t } = useLang()
   const rounds = [...game.history, game.clues]
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-6">
       {rounds.map(
         (clues, ri) =>
           clues.length > 0 && (
             <div key={ri}>
-              <p className="label-tiny mb-2">{t('clue.round', { n: ri + 1 })}</p>
-              <div className="space-y-2">
-                {clues.map((c) => {
+              <p className="label mb-2.5">{t('clue.round', { n: ri + 1 })}</p>
+              <div className="space-y-3">
+                {clues.map((c, ci) => {
                   const p = getPlayer(game, c.playerId)
                   return (
                     <div key={c.playerId + c.text} className="flex items-center gap-3 animate-pop-in">
                       <Avatar player={p} size="sm" />
-                      <div className="rounded-2xl rounded-tl-sm bg-ink-700/80 px-4 py-2">
-                        <p className="text-[11px] text-slate-400">
+                      <div
+                        className={cx(
+                          'paper-flat min-w-0 px-4 py-1.5 shadow-card-sm',
+                          ci % 2 ? 'rotate-[0.7deg]' : '-rotate-[0.7deg]',
+                        )}
+                      >
+                        <p className="truncate text-sm font-semibold leading-tight text-ink-soft">
                           {p.name}
                           {p.id === game.meId ? t('clue.youTag') : ''}
                         </p>
-                        <p className="font-display text-lg font-bold leading-tight text-white">{c.text}</p>
+                        <p className="break-words font-display text-xl leading-snug text-ink">{c.text}</p>
                       </div>
                     </div>
                   )

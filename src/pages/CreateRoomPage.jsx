@@ -45,16 +45,16 @@ export default function CreateRoomPage() {
 
   return (
     <PageShell backTo="/">
-      <div className="animate-fade-up">
+      <div>
         <Logo className="mb-8" />
 
-        <form onSubmit={submit} className="card space-y-5 p-6 sm:p-8">
-          <h2 className="font-display text-2xl font-bold">{t('create.title')}</h2>
+        <form onSubmit={submit} className="panel space-y-5 p-6 sm:p-8">
+          <h2 className="font-display text-3xl leading-tight">{t('create.title')}</h2>
 
           {account ? (
-            <p className="rounded-2xl border border-white/10 bg-ink-900/60 px-4 py-3 text-sm text-slate-300">
-              {t('auth.playingAs')} <b className="text-white">{account.displayName}</b>
-              {error && <span className="mt-2 block text-xs font-medium text-red-400">{error}</span>}
+            <p className="rounded-lg border-2 border-felt-600 bg-felt-950 px-4 py-3 text-base text-felt-200">
+              {t('auth.playingAs')} <b className="text-paper">{account.displayName}</b>
+              {error && <span className="mt-2 block text-[15px] font-semibold text-ember-soft">{error}</span>}
             </p>
           ) : (
             <TextField

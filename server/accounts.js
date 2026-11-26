@@ -1,5 +1,6 @@
 // ระบบบัญชีผู้ใช้: สมัคร / เข้าสู่ระบบ / โปรไฟล์ / สถิติ (ไม่มี dependency ภายนอก)
 import crypto from 'node:crypto'
+import { emptyStats, levelFor } from '../shared/achievements.js'
 
 const USER_RE = /^[A-Za-z0-9_.-]{3,16}$/
 const SESSION_TTL_MS = 60 * 24 * 60 * 60 * 1000
@@ -10,7 +11,6 @@ const scrypt = (pw, salt) =>
   )
 
 export const cleanDisplay = (s) => String(s ?? '').replace(/\s+/g, ' ').trim().slice(0, 16)
-const emptyStats = () => ({ played: 0, wins: 0, spyPlayed: 0, spyWins: 0 })
 
 export function createAccounts(store) {
   const { data, save } = store
@@ -21,6 +21,7 @@ export function createAccounts(store) {
 
   function ensure(a) {
     a.stats = { ...emptyStats(), ...(a.stats ?? {}) }
+    a.achievements = a.achievements ?? {}
     return a
   }
 
@@ -33,6 +34,8 @@ export function createAccounts(store) {
       avatarV: a.avatar ? a.avatarV : null,
       creator: !!a.creator,
       stats: a.stats,
+      level: levelFor(a.stats.points),
+      achievements: Object.keys(a.achievements),
     }
   }
 
@@ -73,6 +76,7 @@ export function createAccounts(store) {
       avatarV: 0,
       creator: false,
       stats: emptyStats(),
+      achievements: {},
       createdAt: Date.now(),
     }
     data.accounts[a.id] = a
@@ -103,5 +107,5 @@ export function createAccounts(store) {
     save()
   }
 
-  return { byId, publicAccount, fromToken, register, login, logout, save }
+  return { all: () => Object.values(data.accounts).map(ensure), byId, publicAccount, fromToken, register, login, logout, save }
 }

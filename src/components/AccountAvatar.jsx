@@ -1,12 +1,13 @@
 import { accountAvatarUrl } from '../lib/api'
-import { cx, initial } from '../lib/utils'
+import { colorFromText, cx, initial } from '../lib/utils'
 
-/** รูปโปรไฟล์ของบัญชี (ถ้าไม่มีรูปจะแสดงตัวอักษรแรกของชื่อ) */
+/** รูปโปรไฟล์ของบัญชี (ถ้าไม่มีรูปจะแสดงตัวอักษรแรกของชื่อบนสีประจำตัว) */
 export default function AccountAvatar({ account, className }) {
   return (
     <div
       className={cx(
-        'relative grid shrink-0 place-items-center overflow-hidden bg-gradient-to-br from-violet-500 to-purple-600 font-display font-bold text-white shadow-lg',
+        'relative grid shrink-0 place-items-center overflow-hidden border-2 border-ink font-display text-ink',
+        colorFromText(account.username ?? account.displayName),
         className,
       )}
     >

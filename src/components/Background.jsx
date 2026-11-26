@@ -1,27 +1,18 @@
-/** Fixed animated neon backdrop shared by every page. */
+/** พื้นหลังโต๊ะไพ่: ผ้าสักหลาดมีเม็ดเนื้อ + แสงตะเกียงเหนือโต๊ะ (นิ่ง ไม่มีแอนิเมชัน) */
+const GRAIN =
+  "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 .55 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E\")"
+
 export default function Background() {
   return (
-    <div aria-hidden className="pointer-events-none fixed inset-0 -z-10 overflow-hidden bg-ink-950">
-      <div className="absolute -left-40 -top-40 h-[28rem] w-[28rem] rounded-full bg-neon-violet/30 blur-[120px] animate-glow-pulse" />
+    <div aria-hidden className="pointer-events-none fixed inset-0 -z-10 bg-felt-900">
       <div
-        className="absolute -right-32 top-1/3 h-[26rem] w-[26rem] rounded-full bg-neon-blue/20 blur-[120px] animate-glow-pulse"
-        style={{ animationDelay: '1.2s' }}
-      />
-      <div
-        className="absolute -bottom-40 left-1/4 h-[24rem] w-[24rem] rounded-full bg-neon-pink/20 blur-[120px] animate-glow-pulse"
-        style={{ animationDelay: '0.6s' }}
-      />
-      {/* subtle grid */}
-      <div
-        className="absolute inset-0 opacity-[0.07]"
+        className="absolute inset-0"
         style={{
-          backgroundImage:
-            'linear-gradient(rgba(255,255,255,.6) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.6) 1px, transparent 1px)',
-          backgroundSize: '48px 48px',
-          maskImage: 'radial-gradient(ellipse at center, black 30%, transparent 75%)',
-          WebkitMaskImage: 'radial-gradient(ellipse at center, black 30%, transparent 75%)',
+          background:
+            'radial-gradient(ellipse 70% 55% at 50% 0%, rgba(58,114,102,.38), transparent 70%), radial-gradient(ellipse at 50% 120%, rgba(4,18,15,.7), transparent 60%)',
         }}
       />
+      <div className="absolute inset-0 opacity-[0.07] mix-blend-overlay" style={{ backgroundImage: GRAIN }} />
     </div>
   )
 }

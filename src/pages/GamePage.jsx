@@ -1,21 +1,64 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Navigate, useNavigate, useParams } from 'react-router-dom'
 import Background from '../components/Background'
 import Button from '../components/Button'
 import ConnectionBanner from '../components/ConnectionBanner'
 import LangSwitch from '../components/LangSwitch'
+import SoundToggle from '../components/SoundToggle'
+import ChatPanel from '../components/ChatPanel'
 import Loading from '../components/Loading'
 import Toast from '../components/Toast'
 import { LogoutIcon } from '../components/Icons'
+import { LogoMark } from '../components/Logo'
 import RevealPhase from '../components/game/RevealPhase'
 import CluePhase from '../components/game/CluePhase'
 import VotePhase from '../components/game/VotePhase'
 import EliminationPhase from '../components/game/EliminationPhase'
 import GameOverPhase from '../components/game/GameOverPhase'
+import CreatorPanel from '../components/game/CreatorPanel'
 import { useRoom } from '../context/RoomContext'
 import { useLang } from '../i18n/LanguageContext'
-import { getPlayer } from '../../shared/gameLogic.js'
+import { didIWin, getPlayer } from '../../shared/gameLogic.js'
 import { cx } from '../lib/utils'
+import { sfx, vibrate } from '../lib/sound'
+
+/** เสียงประกอบเกม: ตอบสนองการเปลี่ยนเฟส / ถึงตาเรา / มีคนส่งคำใบ้ / มีคนโหวต */
+function GameSfx({ game }) {
+  const prev = useRef(null)
+  useEffect(() => {
+    const speakerId = game.turnOrder[game.turnIndex]
+    const cur = {
+      phase: game.phase,
+      round: game.round,
+      clues: game.clues.length,
+      votes: game.voteCount,
+      myTurn: game.phase === 'clues' && speakerId === game.meId,
+    }
+    const p = prev.current
+    prev.current = cur
+    if (!p) {
+      if (cur.phase === 'reveal') sfx.reveal()
+      return
+    }
+    if (cur.phase !== p.phase || cur.round !== p.round) {
+      if (cur.phase === 'reveal') sfx.reveal()
+      else if (cur.phase === 'clues' || cur.phase === 'voting') sfx.phase()
+      else if (cur.phase === 'elimination') {
+        const out = game.lastResult && getPlayer(game, game.lastResult.eliminatedId)
+        if (out?.role === 'imposter') sfx.caught()
+        else sfx.eliminated()
+      } else if (cur.phase === 'gameover') {
+        if (didIWin(game)) sfx.win()
+        else sfx.lose()
+      }
+    } else {
+      if (cur.clues > p.clues) sfx.clue()
+      if (cur.votes > p.votes) sfx.vote()
+    }
+    if (cur.myTurn && !p.myTurn) sfx.yourTurn()
+  }, [game])
+  return null
+}
 
 export default function GamePage() {
   const { code } = useParams()
@@ -41,7 +84,10 @@ export default function GamePage() {
   // ทุกคำสั่งไปเซิร์ฟเวอร์ ถ้าไม่สำเร็จให้แจ้งเตือน (ยกเว้นส่งคำใบ้ซึ่งแสดงที่ช่องกรอกเอง)
   const send = async (type, extra) => {
     const r = await act(type, extra)
-    if (!r.ok && type !== 'SUBMIT_CLUE') setToast(t(`err.${r.error}`))
+    if (!r.ok && type !== 'SUBMIT_CLUE') {
+      sfx.error()
+      setToast(t(`err.${r.error}`))
+    }
     return r
   }
 
@@ -54,37 +100,37 @@ export default function GamePage() {
     <div className="relative min-h-screen">
       <Background />
       <ConnectionBanner />
+      <GameSfx game={game} />
       <main className="mx-auto w-full max-w-3xl px-4 py-6 sm:px-6">
         {/* top bar */}
         <header className="mb-8 flex items-center justify-between gap-3">
-          <div>
-            <p className="font-display text-lg font-bold leading-none">
-              SECRET <span className="text-gradient">FAKER</span>
-            </p>
-            <p className="label-tiny mt-1.5">
-              {t('game.round', { n: game.round })} · {loc(game.category)}
-            </p>
+          <div className="flex min-w-0 items-center gap-3">
+            <LogoMark size={40} />
+            <div className="min-w-0">
+              <p className="truncate font-display text-xl leading-tight">{loc(game.category)}</p>
+              <p className="text-[15px] leading-tight text-felt-300">{t('game.round', { n: game.round })}</p>
+            </div>
           </div>
 
           <div className="flex flex-wrap items-center justify-end gap-2">
-            {showRole && (
-              <span
-                className={cx(
-                  'rounded-full border px-3 py-1.5 font-mono text-[11px] font-bold uppercase tracking-wider',
-                  isFaker
-                    ? 'border-neon-pink/40 bg-neon-pink/10 text-neon-pink'
-                    : 'border-neon-blue/40 bg-neon-blue/10 text-neon-blue',
-                )}
-              >
-                {isFaker ? t('game.fakerNoWord') : t('game.word', { word: loc(game.word) })}
-              </span>
-            )}
+            <SoundToggle />
             <LangSwitch />
             <Button variant="ghost" size="md" className="!px-3" onClick={leave} aria-label={t('game.leaveAria')}>
-              <LogoutIcon width={18} height={18} />
+              <LogoutIcon size={18} />
             </Button>
           </div>
         </header>
+
+        {showRole && (
+          <p
+            className={cx(
+              '-mt-3 mb-6 inline-block rounded-lg border-2 px-3 py-1 text-base font-bold shadow-card-sm',
+              isFaker ? 'border-ember-deep bg-ember text-paper' : 'border-mint-deep bg-mint text-ink',
+            )}
+          >
+            {isFaker ? t('game.fakerNoWord') : t('game.word', { word: loc(game.word) })}
+          </p>
+        )}
 
         {/* key forces a fresh mount (and animation) on each phase / round */}
         <div key={`${game.phase}-${game.round}`}>
@@ -102,6 +148,8 @@ export default function GamePage() {
           )}
         </div>
       </main>
+      <ChatPanel variant="floating" canWrite={me.alive || game.phase === 'gameover'} />
+      <CreatorPanel game={game} act={send} />
       <Toast message={toast} />
     </div>
   )

@@ -1,23 +1,41 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Navigate, useNavigate, useParams } from 'react-router-dom'
 import Background from '../components/Background'
 import Button from '../components/Button'
 import ConnectionBanner from '../components/ConnectionBanner'
 import LangSwitch from '../components/LangSwitch'
+import SoundToggle from '../components/SoundToggle'
+import ChatPanel from '../components/ChatPanel'
 import Loading from '../components/Loading'
 import RoomCodeBadge from '../components/RoomCodeBadge'
 import { EmptySlot, PlayerCard } from '../components/PlayerCard'
 import Toast from '../components/Toast'
-import { LogoutIcon, PlayIcon } from '../components/Icons'
+import { CheckIcon, CopyIcon, GlobeIcon, LockIcon, LogoutIcon, PencilIcon, PlayIcon } from '../components/Icons'
 import { useRoom } from '../context/RoomContext'
 import { useLang } from '../i18n/LanguageContext'
 import { MIN_PLAYERS_TO_START } from '../../shared/gameLogic.js'
 import { cx } from '../lib/utils'
+import { sfx } from '../lib/sound'
+
+/** เสียงประกอบห้องรอ: มีคนเข้า/ออก/กดพร้อม + เสียงเริ่มเกม (แยกเป็นคอมโพเนนต์เพื่อไม่ชนกับ early return ของหน้า) */
+function LobbySfx({ room, meId }) {
+  const prev = useRef(null)
+  useEffect(() => {
+    const cur = { n: room.players.length, ready: room.players.filter((p) => p.ready).length }
+    const p = prev.current
+    prev.current = cur
+    if (!p) return
+    if (cur.n > p.n) sfx.join()
+    else if (cur.n < p.n) sfx.leave()
+    else if (cur.ready > p.ready) sfx.ready()
+  }, [room.players, meId])
+  return null
+}
 
 export default function LobbyPage() {
   const { code } = useParams()
   const navigate = useNavigate()
-  const { session, room, me, isHost, act, leaveRoom } = useRoom()
+  const { session, room, me, isHost, act, leaveRoom, setPrivacy } = useRoom()
   const { t } = useLang()
   const [toast, setToast] = useState('')
 
@@ -64,110 +82,124 @@ export default function LobbyPage() {
 
   const start = async () => {
     const r = await act('START')
+    if (!r.ok) {
+      sfx.error()
+      setToast(t(`err.${r.error}`))
+    } else {
+      sfx.start()
+    }
+  }
+
+  const togglePrivacy = async () => {
+    const r = await setPrivacy(!room.isPrivate)
     if (!r.ok) setToast(t(`err.${r.error}`))
   }
+
+  const PrivacyIcon = room.isPrivate ? LockIcon : GlobeIcon
+  const privacyLabel = room.isPrivate ? t('lobby.private') : t('lobby.public')
 
   return (
     <div className="relative min-h-screen">
       <Background />
       <ConnectionBanner />
-      <main className="mx-auto w-full max-w-6xl px-4 py-8 sm:px-6 lg:py-14">
-        <div className="grid gap-8 lg:grid-cols-[1fr_380px] lg:gap-10">
-          {/* Left: title + players */}
-          <section className="animate-fade-up">
+      <LobbySfx room={room} meId={me?.id} />
+      <main className="mx-auto w-full max-w-6xl px-4 py-8 sm:px-6 lg:py-12">
+        <div className="grid grid-cols-[minmax(0,1fr)] gap-10 lg:grid-cols-[1fr_380px] lg:gap-12">
+          {/* ซ้าย: ชื่อห้อง + ผู้เล่น */}
+          <section>
             <div className="flex items-start justify-between gap-4">
               <div className="min-w-0">
-                <h1 className="break-words font-display text-4xl font-bold tracking-tight sm:text-5xl">
-                  {room.name}
-                </h1>
-                <div className="mt-3 flex items-center gap-3 text-sm text-slate-400">
-                  <span className="rounded-full border border-neon-purple/40 bg-neon-purple/15 px-3 py-1 text-xs font-bold text-purple-300">
-                    {room.isPrivate ? t('lobby.private') : t('lobby.public')}
+                <h1 className="break-words font-display text-4xl leading-tight sm:text-5xl">{room.name}</h1>
+                <div className="mt-3 flex flex-wrap items-center gap-3">
+                  {isHost ? (
+                    <button
+                      type="button"
+                      onClick={togglePrivacy}
+                      title={t('lobby.togglePrivacy')}
+                      className="chip hover:border-gold active:scale-95"
+                    >
+                      <PrivacyIcon size={16} />
+                      {privacyLabel}
+                      <PencilIcon size={14} className="text-felt-300" />
+                    </button>
+                  ) : (
+                    <span className="chip">
+                      <PrivacyIcon size={16} />
+                      {privacyLabel}
+                    </span>
+                  )}
+                  <span className="text-base text-felt-200">
+                    {t('lobby.playersCount', { n: players.length, max: room.maxPlayers })}
                   </span>
-                  <span>{t('lobby.playersCount', { n: players.length, max: room.maxPlayers })}</span>
                 </div>
               </div>
               <div className="flex shrink-0 items-center gap-2">
+                <SoundToggle />
                 <LangSwitch />
-                <Button variant="ghost" size="md" icon={<LogoutIcon width={18} height={18} />} onClick={leave}>
+                <Button variant="ghost" size="md" icon={<LogoutIcon size={18} />} onClick={leave} className="!px-3">
                   <span className="hidden sm:inline">{t('common.leave')}</span>
                 </Button>
               </div>
             </div>
 
-            <div className="mt-8 grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-3 xl:grid-cols-4">
+            <div className="mt-9 grid grid-cols-2 gap-x-5 gap-y-6 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-3 xl:grid-cols-4">
               {slots.map((player, i) =>
                 player ? (
                   <PlayerCard key={player.id} player={player} index={i} isMe={player.id === me?.id} />
                 ) : (
-                  <EmptySlot key={`empty-${i}`} index={i} />
+                  <EmptySlot key={`empty-${i}`} />
                 ),
               )}
             </div>
           </section>
 
-          {/* Right: code + rules + actions */}
-          <aside className="space-y-5 animate-fade-up" style={{ animationDelay: '120ms' }}>
+          {/* ขวา: รหัสห้อง + กติกา + ปุ่มเริ่ม */}
+          <aside className="space-y-5">
             <RoomCodeBadge code={room.code} />
             <button
               onClick={copyLink}
-              className="w-full text-center text-sm font-medium text-slate-400 underline-offset-4 transition hover:text-neon-blue hover:underline"
+              className="flex w-full items-center justify-center gap-2 py-1 text-base font-semibold text-felt-200 underline decoration-felt-500 decoration-2 underline-offset-4 hover:text-paper"
             >
+              <CopyIcon size={16} />
               {t('lobby.copyLink')}
             </button>
 
-            <div className="card space-y-6 p-5 sm:p-6">
-              <div className="rounded-2xl border border-white/5 bg-ink-900/70 p-4">
-                <p className="label-tiny !text-[9px]">{t('lobby.rules')}</p>
-                <p className="mt-2 text-sm leading-relaxed text-slate-300">{t('lobby.rulesText')}</p>
+            <div className="panel space-y-6 p-5 sm:p-6">
+              <div className="paper-flat rule-lines p-4" style={{ backgroundSize: '100% 1.75rem' }}>
+                <p className="label-ink">{t('lobby.rules')}</p>
+                <p className="mt-1.5 text-base leading-7 text-ink">{t('lobby.rulesText')}</p>
               </div>
 
-              <div className="text-center">
-                <p className="font-display text-4xl font-bold">
-                  <span className="text-neon-green">{readyCount}</span>
-                  <span className="text-slate-600">/</span>
-                  <span className="text-neon-green">{players.length}</span>
+              <div className="flex items-end justify-between gap-4">
+                <p className="label">{t('lobby.playersReady')}</p>
+                <p className="font-display leading-none">
+                  <span className="text-5xl text-mint">{readyCount}</span>
+                  <span className="mx-1 text-3xl text-felt-500">/</span>
+                  <span className="text-3xl text-felt-200">{players.length}</span>
                 </p>
-                <p className="label-tiny mt-1">{t('lobby.playersReady')}</p>
               </div>
 
               {!isHost && (
-                <button
+                <Button
+                  variant={me?.ready ? 'secondary' : 'primary'}
+                  className="w-full"
                   onClick={() => act('TOGGLE_READY')}
-                  className={cx(
-                    'h-12 w-full rounded-2xl font-display text-base font-bold transition active:scale-[0.97]',
-                    me?.ready
-                      ? 'bg-ink-700 text-slate-300 hover:bg-ink-600'
-                      : 'bg-neon-green text-ink-950 shadow-[0_0_24px_rgba(52,211,153,0.4)] hover:brightness-110',
-                  )}
+                  icon={me?.ready ? null : <CheckIcon size={22} />}
                 >
                   {me?.ready ? t('lobby.readyCancel') : t('lobby.ready')}
-                </button>
+                </Button>
               )}
 
               {isHost && (
-                <div>
-                  <Button
-                    className="w-full"
-                    disabled={!canStart}
-                    icon={<PlayIcon width={18} height={18} />}
-                    onClick={start}
-                  >
-                    {t('lobby.start')}
-                  </Button>
-                  <p
-                    className={cx(
-                      'mt-4 text-center font-mono text-[10px] font-bold uppercase tracking-wider',
-                      canStart ? 'text-neon-green' : 'text-slate-500',
-                    )}
-                  >
-                    {hint}
-                  </p>
-                </div>
+                <Button className="w-full" disabled={!canStart} icon={<PlayIcon size={20} />} onClick={start}>
+                  {t('lobby.start')}
+                </Button>
               )}
 
-              {!isHost && <p className="text-center text-xs text-slate-500">{hint}</p>}
+              <p className={cx('text-center text-base', canStart ? 'font-semibold text-mint' : 'text-felt-300')}>{hint}</p>
             </div>
+
+            <ChatPanel variant="inline" />
           </aside>
         </div>
       </main>

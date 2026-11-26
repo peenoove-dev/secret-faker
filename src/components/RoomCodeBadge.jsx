@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { CheckIcon, CopyIcon } from './Icons'
 import { useLang } from '../i18n/LanguageContext'
 
+/** ตั๋วรหัสห้อง: ตัวรหัสใหญ่ ๆ ฝั่งซ้าย รอยปรุตรงกลาง ปุ่มคัดลอกฝั่งขวา */
 export default function RoomCodeBadge({ code }) {
   const [copied, setCopied] = useState(false)
   const { t } = useLang()
@@ -17,17 +18,17 @@ export default function RoomCodeBadge({ code }) {
   }
 
   return (
-    <div className="flex items-center justify-between rounded-full border border-white/10 bg-ink-800/80 py-3 pl-6 pr-3 backdrop-blur-md">
-      <div>
-        <p className="label-tiny !text-[9px]">{t('roomCode.label')}</p>
-        <p className="mt-1 font-mono text-2xl font-bold tracking-[0.18em] text-white">{code}</p>
+    <div className="paper -rotate-1 flex items-stretch">
+      <div className="min-w-0 flex-1 px-5 py-3">
+        <p className="label-ink">{t('roomCode.label')}</p>
+        <p className="font-display text-4xl leading-tight tracking-[0.12em] text-ink">{code}</p>
       </div>
       <button
         onClick={copy}
         aria-label={t('roomCode.copy')}
-        className="grid h-11 w-11 place-items-center rounded-2xl bg-white/5 text-slate-300 transition hover:bg-white/10 hover:text-neon-blue"
+        className="grid w-16 shrink-0 place-items-center rounded-r-xl border-l-2 border-dashed border-ink/30 text-ink-soft hover:bg-paper-dim hover:text-ink"
       >
-        {copied ? <CheckIcon className="text-neon-green" /> : <CopyIcon />}
+        {copied ? <CheckIcon size={24} className="text-mint-deep" /> : <CopyIcon size={24} />}
       </button>
     </div>
   )

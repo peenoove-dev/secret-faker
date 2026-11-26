@@ -1,6 +1,9 @@
 import { useEffect, useState } from 'react'
 import Button from '../Button'
 import Avatar from './Avatar'
+import ScreenFlash from '../ScreenFlash'
+import { ArrowRightIcon } from '../Icons'
+import { sfx } from '../../lib/sound'
 import { getPlayer } from '../../../shared/gameLogic.js'
 import { useLang } from '../../i18n/LanguageContext'
 import { cx } from '../../lib/utils'
@@ -25,45 +28,50 @@ export default function EliminationPhase({ game, act, isHost }) {
   const wasFaker = out.role === 'imposter'
   const top = Math.max(...Object.values(tally))
 
-  return (
-    <div className="mx-auto max-w-md text-center animate-fade-up">
-      <p className="label-tiny">{t('elim.votedOut')}</p>
+  // นับถอยหลัง 5 วินาทีสุดท้ายของการเดาคำ มีเสียงติ๊ก
+  useEffect(() => {
+    if (secs !== null && secs > 0 && secs <= 5) sfx.tick()
+  }, [secs])
 
-      <div className="mt-6 flex flex-col items-center">
+  return (
+    <div className={cx('mx-auto max-w-md animate-fade-in', !wasFaker && 'animate-shake')}>
+      <ScreenFlash tone={wasFaker ? 'green' : 'pink'} />
+      <p className="text-center text-lg font-semibold text-felt-200">{t('elim.votedOut')}</p>
+
+      {/* ใบประวัติผู้ถูกไล่ออก พร้อมตราประทับ */}
+      <div className="paper relative mx-auto mt-5 flex w-full max-w-xs flex-col items-center px-6 pb-8 pt-8">
         <Avatar player={{ ...out, alive: true }} size="lg" className="animate-pop-in" />
-        <h2 className="mt-4 font-display text-3xl font-bold">
-          {out.name}
-          {out.id === game.meId && <span className="text-neon-blue"> ({t('common.you')})</span>}
-        </h2>
-        <p
+        <h2 className="mt-4 break-words text-center font-display text-4xl leading-tight">{out.name}</h2>
+        {out.id === game.meId && <p className="text-base font-semibold text-ink-soft">({t('common.you')})</p>}
+        <span
+          key={String(wasFaker)}
           className={cx(
-            'mt-3 rounded-full border px-4 py-1.5 font-display text-sm font-bold uppercase tracking-widest',
-            wasFaker
-              ? 'border-neon-pink/50 bg-neon-pink/10 text-neon-pink'
-              : 'border-neon-blue/50 bg-neon-blue/10 text-neon-blue',
+            'stamp mt-5 animate-stamp px-4 text-2xl',
+            wasFaker ? 'border-ember text-ember' : 'border-mint-deep text-mint-deep',
           )}
         >
           {wasFaker ? t('elim.wasFaker') : t('elim.wasCivilian')}
-        </p>
-        {tie && <p className="mt-3 text-xs text-slate-500">{t('elim.tie')}</p>}
+        </span>
+        {tie && <p className="mt-4 text-center text-base text-ink-soft">{t('elim.tie')}</p>}
       </div>
 
       {guess && (
-        <div className="card mt-6 border-neon-pink/40 p-4 text-center">
+        <div className="panel mt-6 border-ember p-4 text-center">
           {guess.status === 'pending' && guess.by === game.meId && guess.options ? (
             <>
-              <p className="font-display text-lg font-bold text-neon-pink">{t('elim.guessTitle')}</p>
-              {secs !== null && <p className="mt-1 text-xs text-slate-400">{t('elim.guessTimer', { s: secs })}</p>}
-              <div className="mt-4 grid gap-2">
+              <p className="font-display text-2xl leading-tight text-ember-soft">{t('elim.guessTitle')}</p>
+              {secs !== null && <p className="mt-1 text-base text-felt-200">{t('elim.guessTimer', { s: secs })}</p>}
+              <div className="mt-4 grid gap-2.5">
                 {guess.options.map((w, i) => (
                   <button
                     key={w.th}
                     disabled={picked}
                     onClick={() => {
+                      sfx.click()
                       setPicked(true)
                       act('GUESS_WORD', { index: i })
                     }}
-                    className="rounded-2xl border border-white/10 bg-ink-800/80 px-4 py-3 font-display text-base font-bold text-white transition hover:border-neon-pink/60 active:scale-[0.98] disabled:opacity-50"
+                    className="paper px-4 py-2.5 font-display text-xl hover:-translate-y-0.5 active:translate-y-0.5 disabled:opacity-50"
                   >
                     {loc(w)}
                   </button>
@@ -72,11 +80,11 @@ export default function EliminationPhase({ game, act, isHost }) {
             </>
           ) : guess.status === 'pending' ? (
             <>
-              <p className="text-sm font-bold text-white">{t('elim.guessing', { name: out.name })}</p>
-              {secs !== null && <p className="mt-1 text-xs text-slate-400">{t('elim.guessTimer', { s: secs })}</p>}
+              <p className="text-base font-bold">{t('elim.guessing', { name: out.name })}</p>
+              {secs !== null && <p className="mt-1 text-base text-felt-200">{t('elim.guessTimer', { s: secs })}</p>}
             </>
           ) : guess.status === 'wrong' ? (
-            <p className="text-sm font-bold text-neon-green">
+            <p className="text-base font-bold text-mint">
               {guess.picked
                 ? t('elim.guessWrong', { name: out.name, word: loc(guess.picked) })
                 : t('elim.guessTimeout', { name: out.name })}
@@ -85,28 +93,28 @@ export default function EliminationPhase({ game, act, isHost }) {
         </div>
       )}
 
-      <div className="card mt-8 divide-y divide-white/5 p-2 text-left">
+      <ul className="panel mt-7 divide-y-2 divide-felt-700 p-1.5">
         {Object.entries(votes).map(([voterId, targetId]) => {
           const voter = getPlayer(game, voterId)
           const target = getPlayer(game, targetId)
           return (
-            <div key={voterId} className="flex items-center justify-between px-3 py-2 text-sm">
-              <span className="text-slate-300">{voter.name}</span>
-              <span className="text-slate-500">→</span>
-              <span className={cx('font-bold', tally[targetId] === top ? 'text-white' : 'text-slate-400')}>
+            <li key={voterId} className="flex items-center justify-between gap-3 px-3 py-2 text-base">
+              <span className="min-w-0 flex-1 truncate text-felt-200">{voter.name}</span>
+              <ArrowRightIcon size={16} className="shrink-0 text-felt-500" />
+              <span className={cx('min-w-0 flex-1 truncate text-right font-bold', tally[targetId] === top ? 'text-gold' : 'text-felt-200')}>
                 {target.name}
               </span>
-            </div>
+            </li>
           )
         })}
-      </div>
+      </ul>
 
       {guess?.status === 'pending' ? null : isHost ? (
         <Button className="mt-6 w-full" onClick={() => act('CONTINUE')}>
           {t('elim.continue')}
         </Button>
       ) : (
-        <p className="mt-6 text-sm text-slate-400">{t('elim.waitHost')}</p>
+        <p className="mt-6 text-center text-base text-felt-200">{t('elim.waitHost')}</p>
       )}
     </div>
   )

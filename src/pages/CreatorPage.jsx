@@ -9,6 +9,7 @@ import { useAuth } from '../context/AuthContext'
 import { useLang } from '../i18n/LanguageContext'
 import { get, post } from '../lib/api'
 import { cx } from '../lib/utils'
+import { CloseIcon } from '../components/Icons'
 
 /** ระบบผู้สร้าง: ดูคำทั้งหมดในเกม + เพิ่มคำใหม่เข้าหมวดที่เลือก */
 export default function CreatorPage() {
@@ -46,7 +47,7 @@ export default function CreatorPage() {
   if (!ready) return <Loading />
   if (!account) return <Navigate to="/login" replace />
   if (!account.creator) return <Navigate to="/profile" replace />
-  if (!cats) return error ? <p className="p-8 text-center text-red-400">{error}</p> : <Loading />
+  if (!cats) return error ? <p className="p-8 text-center font-semibold text-ember-soft">{error}</p> : <Loading />
 
   const add = async (e) => {
     e.preventDefault()
@@ -100,17 +101,17 @@ export default function CreatorPage() {
 
   return (
     <PageShell backTo="/profile" maxWidth="max-w-2xl">
-      <div className="animate-fade-up space-y-5">
+      <div className="space-y-5">
         <div>
-          <h1 className="font-display text-3xl font-bold">{t('creator.title')}</h1>
-          <p className="mt-1 text-sm text-slate-400">{t('creator.total', { n: total, c: cats.length })}</p>
+          <h1 className="font-display text-4xl leading-tight">{t('creator.title')}</h1>
+          <p className="mt-1 text-base text-felt-200">{t('creator.total', { n: total, c: cats.length })}</p>
         </div>
 
-        <form onSubmit={add} className="card space-y-4 p-5 sm:p-6">
-          <p className="font-display text-lg font-bold">{t('creator.add')}</p>
+        <form onSubmit={add} className="panel space-y-4 p-5 sm:p-6">
+          <p className="font-display text-2xl leading-tight">{t('creator.add')}</p>
 
           <div>
-            <p className="label-tiny mb-2">{t('creator.category')}</p>
+            <p className="label mb-2">{t('creator.category')}</p>
             <div className="flex flex-wrap gap-2">
               {cats.map((c) => (
                 <button
@@ -118,10 +119,10 @@ export default function CreatorPage() {
                   type="button"
                   onClick={() => setCatKey(c.key)}
                   className={cx(
-                    'rounded-full border px-4 py-2 text-sm font-bold transition',
+                    'rounded-full border-2 px-4 py-1.5 text-base font-bold transition-colors',
                     c.key === catKey
-                      ? 'border-neon-blue bg-neon-blue/20 text-white shadow-glow-blue'
-                      : 'border-white/10 bg-white/5 text-slate-300 hover:border-white/30',
+                      ? 'border-gold-deep bg-gold text-ink'
+                      : 'border-felt-600 bg-felt-950 text-felt-200 hover:border-felt-500 hover:text-paper',
                   )}
                 >
                   {loc(c.category)}
@@ -149,20 +150,20 @@ export default function CreatorPage() {
             onChange={(e) => setTranslation(e.target.value)}
           />
 
-          <Button type="submit" variant="neon" className="w-full" disabled={busy || !word.trim()}>
+          <Button type="submit" variant="paper" className="w-full" disabled={busy || !word.trim()}>
             {t('creator.addBtn', { cat: loc(current.category) })}
           </Button>
         </form>
 
-        <div className="card space-y-3 p-5 sm:p-6">
+        <div className="panel space-y-3 p-5 sm:p-6">
           <div className="flex items-center justify-between gap-3">
-            <p className="font-display text-lg font-bold">{t('creator.all')}</p>
+            <p className="font-display text-2xl leading-tight">{t('creator.all')}</p>
           </div>
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder={t('creator.search')}
-            className="h-12 w-full rounded-2xl border border-white/10 bg-ink-900/80 px-4 text-sm text-white placeholder-slate-600 outline-none focus:border-neon-blue"
+            className="h-12 w-full rounded-lg border-2 border-paper-edge bg-paper px-4 text-base text-ink placeholder-ink-faint outline-none focus:border-gold"
           />
 
           {cats.map((c) => {
@@ -170,18 +171,18 @@ export default function CreatorPage() {
             if (q && !words.length) return null
             const customCount = c.words.filter((w) => w.custom).length
             return (
-              <details key={c.key} open={q ? true : c.key === catKey} className="rounded-2xl border border-white/10 bg-ink-900/50 p-3">
+              <details key={c.key} open={q ? true : c.key === catKey} className="rounded-xl border-2 border-felt-700 bg-felt-950/60 p-3">
                 <summary className="cursor-pointer select-none font-bold">
-                  {loc(c.category)} <span className="text-sm font-normal text-slate-500">· {c.words.length}</span>
-                  {customCount > 0 && <span className="ml-2 text-xs text-amber-300">+{customCount}</span>}
+                  {loc(c.category)} <span className="ml-1 text-base font-normal text-felt-300">{c.words.length}</span>
+                  {customCount > 0 && <span className="ml-2 text-sm text-gold">+{customCount}</span>}
                 </summary>
                 <div className="mt-3 flex flex-wrap gap-1.5">
                   {words.map((w) => (
                     <span
                       key={w.id ?? w.th}
                       className={cx(
-                        'inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-bold',
-                        w.custom ? 'border-amber-400/50 bg-amber-400/10 text-amber-100' : 'border-white/10 bg-white/5 text-slate-200',
+                        'inline-flex items-center gap-1.5 rounded-full border-2 px-3 py-0.5 text-base font-semibold',
+                        w.custom ? 'border-gold bg-gold/15 text-gold-soft' : 'border-felt-600 bg-felt-800 text-felt-200',
                       )}
                       title={`${w.th} / ${w.en}`}
                     >
@@ -191,9 +192,9 @@ export default function CreatorPage() {
                           type="button"
                           onClick={() => remove(w.id)}
                           aria-label={t('creator.delete')}
-                          className="grid h-4 w-4 place-items-center rounded-full bg-black/30 text-[10px] leading-none hover:bg-red-500/70"
+                          className="grid h-5 w-5 place-items-center rounded-full bg-felt-950 hover:bg-ember"
                         >
-                          ×
+                          <CloseIcon size={11} />
                         </button>
                       )}
                     </span>
@@ -202,12 +203,12 @@ export default function CreatorPage() {
               </details>
             )
           })}
-          <p className="text-xs text-slate-500">{t('creator.legend')}</p>
+          <p className="text-[15px] text-felt-300">{t('creator.legend')}</p>
         </div>
 
-        <div className="card space-y-3 p-5 sm:p-6">
-          <p className="font-display text-lg font-bold">{t('creator.backup')}</p>
-          <p className="text-xs leading-relaxed text-slate-400">{t('creator.backupNote')}</p>
+        <div className="panel space-y-3 p-5 sm:p-6">
+          <p className="font-display text-2xl leading-tight">{t('creator.backup')}</p>
+          <p className="text-[15px] leading-relaxed text-felt-200">{t('creator.backupNote')}</p>
           <div className="flex flex-col gap-3 sm:flex-row">
             <Button variant="secondary" size="md" className="flex-1" onClick={exportBackup}>
               {t('creator.export')}

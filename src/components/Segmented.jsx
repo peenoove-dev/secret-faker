@@ -1,23 +1,22 @@
 import { cx } from '../lib/utils'
 
-/** Pill-style option picker. options: [{ value, label }] */
+/** ตัวเลือกแบบแถบ: อันที่เลือกเป็นป้ายทองยกขึ้น. options: [{ value, label }] */
 export default function Segmented({ label, options, value, onChange, className }) {
   return (
     <div className={className}>
-      {label && <span className="label-tiny mb-2 block">{label}</span>}
-      <div className="flex gap-2 rounded-2xl border border-white/10 bg-ink-900/80 p-1.5">
+      {label && <span className="label mb-1.5 block">{label}</span>}
+      <div className="flex gap-1.5 rounded-xl border-2 border-felt-600 bg-felt-950 p-1">
         {options.map((opt) => {
           const active = opt.value === value
           return (
             <button
               key={String(opt.value)}
               type="button"
+              aria-pressed={active}
               onClick={() => onChange(opt.value)}
               className={cx(
-                'h-11 flex-1 rounded-xl font-display text-sm font-bold transition',
-                active
-                  ? 'bg-gradient-to-r from-neon-violet to-neon-purple text-white shadow-glow-purple'
-                  : 'text-slate-400 hover:text-white',
+                'h-11 flex-1 rounded-lg text-base font-bold transition-colors',
+                active ? 'bg-gold text-ink shadow-[0_2px_0_0_#8a5f0b]' : 'text-felt-200 hover:bg-felt-800 hover:text-paper',
               )}
             >
               {opt.label}
