@@ -61,6 +61,7 @@ React + Vite + Tailwind + เซิร์ฟเวอร์ Node.js ตัวเ
 ### ตั้งค่าบน Render (Environment)
 | ตัวแปร | ใช้ทำอะไร |
 |---|---|
+| `CREATOR_USER` / `CREATOR_PASS` | ชื่อ/รหัสบัญชีผู้สร้างระดับตำนาน (เลเวล 999, ความสำเร็จครบ, เอฟเฟกต์โปรไฟล์) สร้างอัตโนมัติตอนเปิดเซิร์ฟเวอร์ — หรือรันในเครื่อง: `node scripts/seed-creator.js <ชื่อ> <รหัส>` |
 | `CREATOR_CODE` | รหัสลับปลดล็อกระบบผู้สร้าง (ไม่ตั้ง = ปิดระบบผู้สร้าง) |
 | `UPSTASH_REDIS_REST_URL` / `UPSTASH_REDIS_REST_TOKEN` | เก็บบัญชี + คำที่เพิ่มให้อยู่ถาวร (แนะนำ — สร้าง Redis ฟรีที่ upstash.com) |
 
