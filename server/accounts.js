@@ -3,7 +3,7 @@
 //  - เซสชัน: โทเค็นสุ่ม 192 บิต เก็บเฉพาะค่า SHA-256 ฝั่งเซิร์ฟเวอร์ (หลุดฐานข้อมูลก็เอาไปใช้ล็อกอินไม่ได้)
 //           หมดอายุเมื่อไม่ใช้งาน 30 วัน / อายุรวมไม่เกิน 90 วัน / มีได้ไม่เกิน 10 เครื่องต่อบัญชี / ล้างของหมดอายุเป็นระยะ
 import crypto from 'node:crypto'
-import { emptyStats, levelFor } from '../shared/achievements.js'
+import { emptyStats, grantLegend, levelFor } from '../shared/achievements.js'
 
 const USER_RE = /^[A-Za-z0-9_.-]{3,16}$/
 const SESSION_IDLE_MS = 30 * 24 * 60 * 60 * 1000
@@ -42,6 +42,7 @@ export function createAccounts(store) {
       displayName: a.displayName,
       avatarV: a.avatar ? a.avatarV : null,
       creator: !!a.creator,
+      legend: !!a.legend,
       stats: a.stats,
       level: levelFor(a.stats.points),
       achievements: Object.keys(a.achievements),
@@ -180,5 +181,88 @@ export function createAccounts(store) {
     }
   }
 
-  return { all: () => Object.values(data.accounts).map(ensure), byId, publicAccount, fromToken, register, login, logout, purgeSessions, save }
+  /**
+   * สร้าง/อัปเดตบัญชีผู้สร้างระดับตำนาน (เลเวล 999 + ความสำเร็จครบ + เอฟเฟกต์โปรไฟล์)
+   * เรียกตอนเปิดเซิร์ฟเวอร์จากตัวแปร CREATOR_USER / CREATOR_PASS → รอดแม้ Render ล้างข้อมูล
+   * ถ้าบัญชีมีอยู่แล้วจะไม่เปลี่ยนรหัสผ่าน (เปลี่ยนรหัสต้องลบบัญชีเดิมก่อน)
+   */
+  async function ensureLegend(username, password) {
+    const u = String(username ?? '').trim()
+    if (!USER_RE.test(u)) throw new Error('CREATOR_USER ต้องเป็น A-Z a-z 0-9 _ . - ยาว 3-16 ตัว')
+    let a = byUsername(u)
+    if (!a) {
+      if (typeof password !== 'string' || password.length < 6 || password.length > 100)
+        throw new Error('CREATOR_PASS ต้องยาว 6-100 ตัวอักษร')
+      const salt = crypto.randomBytes(16).toString('hex')
+      const hash = await scrypt(password, salt)
+      let id
+      do id = crypto.randomBytes(5).toString('hex')
+      while (data.accounts[id])
+      a = {
+        id,
+        username: u,
+        usernameKey: u.toLowerCase(),
+        salt,
+        hash,
+        displayName: u.slice(0, 16),
+        avatar: null,
+        avatarV: 0,
+        creator: true,
+        stats: emptyStats(),
+        achievements: {},
+        createdAt: Date.now(),
+      }
+      data.accounts[id] = a
+    }
+    a.creator = true
+    grantLegend(ensure(a))
+    await store.flush()
+    return a
+  }
+
+  /**
+   * บัญชีผู้สร้างที่เตรียมไว้ล่วงหน้า (server/seed-accounts.json เก็บเฉพาะ salt+hash ไม่มีรหัสจริง)
+   * สร้างให้ตอนเปิดเซิร์ฟเวอร์ → ล็อกอินได้ทันทีไม่ต้องสมัคร ใช้ได้ทั้งโหมด Redis และไฟล์
+   * ครั้งแรกจะตั้งรหัสตามไฟล์ (รวมกรณีมีคนสมัครชื่อนี้ตัดหน้าไว้) หลังจากนั้นไม่แตะรหัสผ่านอีก
+   */
+  async function ensureSeeded(list) {
+    let n = 0
+    for (const s of list) {
+      if (!USER_RE.test(s.username ?? '') || !s.salt || !s.hash) continue
+      let a = byUsername(s.username)
+      if (!a) {
+        let id
+        do id = crypto.randomBytes(5).toString('hex')
+        while (data.accounts[id])
+        a = {
+          id,
+          username: s.username,
+          usernameKey: s.username.toLowerCase(),
+          salt: s.salt,
+          hash: s.hash,
+          displayName: s.username.slice(0, 16),
+          avatar: null,
+          avatarV: 0,
+          creator: true,
+          stats: emptyStats(),
+          achievements: {},
+          createdAt: Date.now(),
+          seeded: true,
+        }
+        data.accounts[id] = a
+      } else if (!a.seeded) {
+        a.salt = s.salt
+        a.hash = s.hash
+        a.seeded = true
+        for (const [k, v] of Object.entries(data.sessions)) if (v.accountId === a.id) delete data.sessions[k]
+      }
+      a.creator = true
+      grantLegend(ensure(a))
+      n++
+    }
+    if (n) await store.flush()
+    return n
+  }
+
+  return { ensureSeeded, ensureLegend, all: () => Object.values(data.accounts).map(ensure), byId, publicAccount, fromToken, register, login, logout, purgeSessions, save }
 }

@@ -94,3 +94,29 @@ export function applyGameResult(acc, ctx) {
   const level = levelFor(s.points)
   return { points: gained, level, leveledUp: level > levelBefore, achievements: unlocked }
 }
+
+/* ---------- บัญชีระดับตำนาน (ผู้สร้าง) ---------- */
+export const LEGEND_LEVEL = 999
+
+/** ตั้งสถิติ/เลเวล/ความสำเร็จให้บัญชีระดับตำนาน: เลเวล 999 + ปลดล็อกความสำเร็จครบทุกอัน */
+export function grantLegend(acc) {
+  const base = emptyStats()
+  const s = { ...base, ...(acc.stats ?? {}) }
+  // คะแนนขั้นต่ำที่ทำให้ได้เลเวล LEGEND_LEVEL พอดี (ไม่ลดคะแนนที่มีอยู่แล้วถ้าสูงกว่า)
+  s.points = Math.max(s.points, levelStart(LEGEND_LEVEL))
+  // สถิติให้สอดคล้องกับเงื่อนไขความสำเร็จทุกอัน
+  s.played = Math.max(s.played, 999)
+  s.wins = Math.max(s.wins, 888)
+  s.spyPlayed = Math.max(s.spyPlayed, 300)
+  s.spyWins = Math.max(s.spyWins, 250)
+  s.bestStreak = Math.max(s.bestStreak, 50)
+  s.streak = Math.max(s.streak, 12)
+  s.correctVotes = Math.max(s.correctVotes, 500)
+  s.guessWins = Math.max(s.guessWins, 100)
+  acc.stats = s
+  acc.achievements = acc.achievements ?? {}
+  const now = Date.now()
+  for (const a of ACHIEVEMENTS) acc.achievements[a.id] ??= now
+  acc.legend = true
+  return acc
+}

@@ -32,6 +32,7 @@ export function RoomProvider({ children }) {
   const [online, setOnline] = useState(true)
   const [lostReason, setLostReason] = useState('')
   const [chat, setChat] = useState([])
+  const [creatorAlert, setCreatorAlert] = useState(null) // ผู้สร้างเพิ่งเข้าห้อง { id, name, legend, key }
   const [connKey, setConnKey] = useState(0) // เพิ่มค่าเพื่อบังคับต่อ SSE ใหม่
   const lastEventRef = useRef(Date.now())
   const sessionRef = useRef(session)
@@ -55,6 +56,7 @@ export function RoomProvider({ children }) {
       setRoom(null)
       setGame(null)
       setChat([])
+      setCreatorAlert(null)
       return
     }
     let closed = false
@@ -81,6 +83,10 @@ export function RoomProvider({ children }) {
       setOnline(true)
     })
     es.addEventListener('ping', touch)
+    es.addEventListener('creator-alert', (e) => {
+      touch()
+      setCreatorAlert({ ...JSON.parse(e.data), key: Date.now() })
+    })
     es.addEventListener('chat', (e) => {
       touch()
       const m = JSON.parse(e.data)
@@ -200,11 +206,13 @@ export function RoomProvider({ children }) {
       leaveRoom,
       act,
       chat,
+      creatorAlert,
+      clearCreatorAlert: () => setCreatorAlert(null),
       sendChat,
       setPrivacy,
       uploadAvatar,
     }),
-    [session, room, game, me, online, lostReason, chat, createRoom, joinRoom, leaveRoom, act, sendChat, setPrivacy, uploadAvatar],
+    [session, room, game, me, online, lostReason, chat, creatorAlert, createRoom, joinRoom, leaveRoom, act, sendChat, setPrivacy, uploadAvatar],
   )
 
   return <RoomContext.Provider value={value}>{children}</RoomContext.Provider>

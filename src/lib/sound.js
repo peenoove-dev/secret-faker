@@ -143,6 +143,7 @@ export const sfx = {
   ready: () => notes([[660, 0, 0.09], [990, 0.07, 0.14]], { type: 'triangle', v: 0.2 }),
   chat: () => tone({ f: 880, to: 1180, d: 0.09, type: 'sine', v: 0.12 }),
   send: () => tone({ f: 520, to: 760, d: 0.08, type: 'triangle', v: 0.12 }),
+  creator: () => notes([[523, 0, 0.12], [659, 0.1, 0.12], [784, 0.2, 0.12], [1047, 0.3, 0.35]], { type: 'triangle', v: 0.22 }),
   error: () => {
     tone({ f: 190, d: 0.16, type: 'sawtooth', v: 0.13 })
     vibrate(60)

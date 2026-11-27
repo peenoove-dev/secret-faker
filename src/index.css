@@ -133,6 +133,71 @@ html[lang='th'] .tracking-widest {
   animation: draw-in 0.8s ease-out both;
 }
 
+
+/* ---------- เอฟเฟกต์บัญชีระดับตำนาน (ผู้สร้าง) ---------- */
+@keyframes legend-spin { to { transform: rotate(360deg); } }
+@keyframes legend-pulse { 0%,100% { opacity: .55; transform: scale(1); } 50% { opacity: 1; transform: scale(1.12); } }
+@keyframes legend-shine { to { background-position: 200% center; } }
+@keyframes legend-float { 0%,100% { transform: translateY(0) rotate(-6deg); } 50% { transform: translateY(-5px) rotate(6deg); } }
+@keyframes legend-spark { 0% { opacity: 0; transform: translateY(8px) scale(.4); } 30% { opacity: 1; } 100% { opacity: 0; transform: translateY(-34px) scale(1); } }
+@keyframes legend-border { to { --a: 360deg; } }
+
+/* วงแหวนรุ้งหมุนรอบรูปโปรไฟล์ + ออร่าเรืองแสง */
+.legend-wrap { position: relative; isolation: isolate; }
+.legend-wrap::before {
+  content: ''; position: absolute; inset: -7px; border-radius: inherit; z-index: -1;
+  background: conic-gradient(from 0deg, #ffd24a, #ff4d6d, #b86bff, #4dc3ff, #5dffb0, #ffd24a);
+  animation: legend-spin 3.2s linear infinite;
+}
+.legend-wrap::after {
+  content: ''; position: absolute; inset: -16px; border-radius: inherit; z-index: -2;
+  background: radial-gradient(circle, rgba(255, 210, 74, .55), rgba(184, 107, 255, .25) 55%, transparent 72%);
+  filter: blur(8px); animation: legend-pulse 2.4s ease-in-out infinite;
+}
+.legend-crown { position: absolute; left: 50%; top: -22px; margin-left: -.6em; font-size: 1.6em; line-height: 1;
+  filter: drop-shadow(0 2px 6px rgba(255, 210, 74, .9)); animation: legend-float 2.8s ease-in-out infinite; z-index: 5; }
+.legend-spark { position: absolute; z-index: 4; pointer-events: none; font-size: .9em; animation: legend-spark 2.4s ease-out infinite; }
+
+/* ชื่อสีทองรุ้งวิ่ง */
+.legend-name {
+  background: linear-gradient(100deg, #ffd24a, #fff6c9 25%, #ff7ab8 45%, #8fd3ff 65%, #ffd24a 85%);
+  background-size: 200% auto; -webkit-background-clip: text; background-clip: text;
+  color: transparent; animation: legend-shine 3s linear infinite;
+  filter: drop-shadow(0 0 8px rgba(255, 210, 74, .55));
+}
+
+/* แผงโปรไฟล์ขอบรุ้งเรืองแสง */
+.legend-panel {
+  position: relative; border-color: transparent !important;
+  background:
+    linear-gradient(#143530, #143530) padding-box,
+    conic-gradient(from var(--a, 0deg), #ffd24a, #ff4d6d, #b86bff, #4dc3ff, #5dffb0, #ffd24a) border-box;
+  box-shadow: 0 0 28px rgba(255, 210, 74, .35), 0 0 60px rgba(184, 107, 255, .2);
+  animation: legend-border 5s linear infinite;
+}
+@property --a { syntax: '<angle>'; initial-value: 0deg; inherits: false; }
+.legend-badge {
+  background: linear-gradient(100deg, #ffd24a, #ff7ab8, #8fd3ff, #ffd24a); background-size: 200% auto;
+  animation: legend-shine 3s linear infinite; color: #2a1f1a;
+}
+
+
+/* ---------- แจ้งเตือนผู้สร้างเข้าห้อง ---------- */
+@keyframes creator-drop { 0% { opacity: 0; transform: translate(-50%, -140%) scale(.9); } 12% { opacity: 1; transform: translate(-50%, 0) scale(1.04); } 20% { transform: translate(-50%, 0) scale(1); } 88% { opacity: 1; transform: translate(-50%, 0); } 100% { opacity: 0; transform: translate(-50%, -140%); } }
+@keyframes creator-glow { 0%,100% { box-shadow: 0 0 18px rgba(255,210,74,.6), 0 0 40px rgba(184,107,255,.35); } 50% { box-shadow: 0 0 32px rgba(255,210,74,.95), 0 0 70px rgba(255,77,109,.5); } }
+.creator-alert {
+  position: fixed; left: 50%; top: max(12px, env(safe-area-inset-top)); z-index: 70; width: min(92vw, 28rem);
+  transform: translateX(-50%); animation: creator-drop 6s ease-in-out both, creator-glow 1.2s ease-in-out infinite;
+  border-radius: 1rem; border: 3px solid #ffd24a; padding: .75rem 1rem; text-align: center;
+  background: linear-gradient(110deg, #3b2a05, #143530 40%, #2a1048 100%); color: #fff6c9;
+}
+.creator-chip {
+  position: fixed; left: 50%; top: 6px; z-index: 40; transform: translateX(-50%); pointer-events: none;
+  max-width: 90vw; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  border-radius: 999px; border: 2px solid #ffd24a; background: rgba(20, 53, 48, .92); color: #ffe9a3;
+  padding: .1rem .75rem; font-size: .8rem; font-weight: 700;
+}
+
 /* ผู้ใช้ที่ตั้งค่า "ลดการเคลื่อนไหว" ในระบบ: ปิดแอนิเมชันที่ไม่จำเป็น */
 @media (prefers-reduced-motion: reduce) {
   *,

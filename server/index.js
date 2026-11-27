@@ -49,6 +49,23 @@ const rooms = new Map()
 
 const store = await createStore(path.resolve(__dirname, '../data'))
 const accounts = createAccounts(store)
+// บัญชีผู้สร้างที่เตรียมไว้ในไฟล์ (ล็อกอินได้เลย ไม่ต้องสมัคร)
+try {
+  const list = JSON.parse(fs.readFileSync(path.resolve(__dirname, 'seed-accounts.json'), 'utf8'))
+  const n = await accounts.ensureSeeded(list)
+  if (n) console.log(`[accounts] seeded legend creators: ${list.map((s) => s.username).join(', ')}`)
+} catch (e) {
+  if (e.code !== 'ENOENT') console.error('[accounts] seed failed:', e.message)
+}
+// บัญชีผู้สร้างระดับตำนาน: ตั้ง CREATOR_USER + CREATOR_PASS ใน Environment (ไม่เก็บรหัสในโค้ด)
+if (process.env.CREATOR_USER) {
+  try {
+    const a = await accounts.ensureLegend(process.env.CREATOR_USER, process.env.CREATOR_PASS)
+    console.log(`[accounts] legend creator ready: @${a.username} (level ${levelFor(a.stats.points)})`)
+  } catch (e) {
+    console.error('[accounts] ensureLegend failed:', e.message)
+  }
+}
 const CREATOR_CODE = process.env.CREATOR_CODE || '' // รหัสลับสำหรับปลดล็อกระบบผู้สร้าง (ตั้งใน Render → Environment)
 
 /** คลังคำ = คำในโค้ด + คำที่ผู้สร้างเพิ่มเอง */
@@ -107,14 +124,19 @@ function publicRoom(room) {
     mode: room.mode,
     hostId: room.players.find((p) => p.isHost)?.id ?? null,
     inGame: !!room.game,
-    players: room.players.map((p) => ({
+    players: room.players.map((p) => {
+      const acc = accounts.byId(room.accountOf.get(p.id))
+      return {
       id: p.id,
       name: p.name,
       ready: p.ready,
       isHost: p.isHost,
+      creator: !!acc?.creator, // ผู้สร้างอยู่ในห้อง → ทุกคนเห็นป้าย "ผู้สร้างออนไลน์"
+      legend: !!acc?.legend,
       connected: p.conns.size > 0,
       avatarV: p.avatar ? p.avatarV : null,
-    })),
+      }
+    }),
   }
 }
 
@@ -254,6 +276,7 @@ function leaderboard(sort, meId) {
       id: a.id,
       displayName: a.displayName,
       avatarV: a.avatar ? a.avatarV : null,
+      legend: !!a.legend,
       level: levelFor(a.stats.points),
       points: a.stats.points,
       played: a.stats.played,
@@ -814,7 +837,15 @@ const server = http.createServer(async (req, res) => {
       if (acc) room.accountOf.set(player.id, acc.id)
       room.players.push(player)
       scheduleGrace(room, player)
-      addChat(room, { sys: 'join', name: player.name })
+      if (acc?.creator) {
+        // ผู้สร้างเข้าห้อง → แจ้งเตือนทุกคนที่อยู่ในห้อง (แบนเนอร์ + เสียง + ข้อความระบบในแชต)
+        addChat(room, { sys: 'creatorJoin', name: player.name })
+        room.players.forEach((p) => {
+          if (p !== player) pushEvent(p, 'creator-alert', { id: player.id, name: player.name, legend: !!acc.legend })
+        })
+      } else {
+        addChat(room, { sys: 'join', name: player.name })
+      }
       broadcast(room)
       return json(res, 200, { code: room.code, playerId: player.id, token: player.token })
     }

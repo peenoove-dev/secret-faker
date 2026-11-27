@@ -9,9 +9,12 @@ import ProfilePage from './pages/ProfilePage'
 import CreatorPage from './pages/CreatorPage'
 import PublicRoomsPage from './pages/PublicRoomsPage'
 import LeaderboardPage from './pages/LeaderboardPage'
+import CreatorBanner from './components/CreatorBanner'
 
 export default function App() {
   return (
+    <>
+    <CreatorBanner />
     <Routes>
       <Route path="/" element={<HomePage />} />
       <Route path="/login" element={<LoginPage />} />
@@ -25,5 +28,6 @@ export default function App() {
       <Route path="/game/:code" element={<GamePage />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
+    </>
   )
 }

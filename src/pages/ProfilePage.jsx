@@ -85,9 +85,9 @@ export default function ProfilePage() {
   return (
     <PageShell backTo="/">
       <div className="space-y-5">
-        <div className="panel p-6 text-center sm:p-8">
-          <div className="relative mx-auto h-24 w-24">
-            <AccountAvatar account={account} className="h-24 w-24 rounded-2xl text-5xl" />
+        <div className={cx('panel p-6 text-center sm:p-8', account.legend && 'legend-panel')}>
+          <div className={cx('relative mx-auto h-24 w-24', account.legend && 'pt-0')}>
+            <div className={account.legend ? 'pt-3' : ''}><AccountAvatar account={account} className="h-24 w-24 rounded-2xl text-5xl" /></div>
             <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={onFile} />
             <button
               type="button"
@@ -108,10 +108,15 @@ export default function ProfilePage() {
               {t('profile.remove')}
             </button>
           )}
-          <p className="mt-3 text-base text-felt-300">@{account.username}</p>
+          <p className={cx('mt-3 text-base text-felt-300', account.legend && 'legend-name font-display text-2xl')}>@{account.username}</p>
           {account.creator && (
-            <span className="mt-2 inline-flex items-center gap-1.5 rounded-full border-2 border-gold bg-gold/10 px-3 py-0.5 text-sm font-bold text-gold">
-              {t('creator.badge')}
+            <span
+              className={cx(
+                'mt-2 inline-flex items-center gap-1.5 rounded-full border-2 px-3 py-0.5 text-sm font-bold',
+                account.legend ? 'legend-badge border-gold' : 'border-gold bg-gold/10 text-gold',
+              )}
+            >
+              {account.legend ? `👑 ${t('legend.badge')}` : t('creator.badge')}
             </span>
           )}
 
@@ -156,7 +161,7 @@ export default function ProfilePage() {
           <div className="flex items-end justify-between">
             <div>
               <p className="label">{t('profile.level')}</p>
-              <p className="font-display text-6xl leading-none text-gold">{level}</p>
+              <p className={cx('font-display text-6xl leading-none', account.legend ? 'legend-name' : 'text-gold')}>{level}</p>
             </div>
             <p className="text-right text-base text-felt-200">
               <b className="font-display text-2xl font-normal text-paper">{s.points}</b> {t('stat.points')}

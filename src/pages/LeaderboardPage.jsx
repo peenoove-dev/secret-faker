@@ -47,9 +47,10 @@ function Row({ r, sort, mine, t }) {
       >
         {r.rank}
       </span>
-      <AccountAvatar account={r} className="h-10 w-10 rounded-lg text-lg" />
+      <AccountAvatar account={r} showFx={false} className="h-10 w-10 rounded-lg text-lg" />
       <div className="min-w-0 flex-1">
-        <p className="truncate text-base font-bold leading-tight">
+        <p className={cx('truncate text-base font-bold leading-tight', r.legend && 'legend-name')}>
+          {r.legend && '👑 '}
           {r.displayName}
           {mine && <span className="font-normal text-ink-soft"> ({t('common.you')})</span>}
         </p>
